@@ -31,3 +31,9 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     FOREIGN KEY (chat_id) REFERENCES chats(id) ON DELETE CASCADE,
     INDEX idx_chat_id (chat_id)
 );
+
+
+SELECT id,user_email,title
+FROM chats
+ORDER BY id DESC
+LIMIT 10;
