@@ -1,5 +1,7 @@
 from flask import render_template, Blueprint, jsonify
 from connect import db_connection
+from urllib.parse import unquote
+
 
 admin_dp = Blueprint('admin', __name__)
 
@@ -70,7 +72,7 @@ def get_user_chats(user_email):
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT id, title, created_at FROM chats WHERE user_email = %s ORDER BY created_at DESC",
-                (user_email,)
+                (unquote(user_email),)
             )
             chats = cur.fetchall()
         return jsonify({'chats': [

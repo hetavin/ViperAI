@@ -38,5 +38,11 @@ FROM chats
 ORDER BY id DESC
 LIMIT 10;
 
-SELECT * FROM chat_messages
-WHERE email = 'vtsl22@gmail.com';
+SELECT
+    u.email,
+    c.user_email,
+    c.id,
+    c.title
+FROM users u
+LEFT JOIN chats c
+ON c.user_email = u.email;
