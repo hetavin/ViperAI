@@ -433,7 +433,7 @@ function send() {
     fetch('/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: txt, chat_id: chat.serverChatId || null, title: chat.title })
+        body: JSON.stringify({ message: txt, chat_id: chat.serverChatId || null, title: chat.title, user_email: profile.email, user_name: profile.name })
     })
         .then(r => r.json())
         .then(d => {

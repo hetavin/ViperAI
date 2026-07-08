@@ -6,6 +6,25 @@ from connect import db_connection
 chat_bp = Blueprint("chat", __name__)
 
 
+def _get_verified_user(session_email, body_email):
+    """Return (email, name) if user exists in DB, else (None, None)."""
+    email = session_email or body_email
+    if not email:
+        return None, None
+    conn = db_connection()
+    if not conn:
+        return None, None
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT name FROM users WHERE email = %s", (email,))
+            row = cur.fetchone()
+        return (email, row['name']) if row else (None, None)
+    except Exception:
+        return None, None
+    finally:
+        conn.close()
+
+
 def _save_to_db(user_email, user_name, chat_id, title, question, answer, result_box):
     conn = db_connection()
     if not conn:
@@ -44,13 +63,13 @@ def chat():
     if not question:
         return jsonify({"error": "Empty message"}), 400
 
-    user_id    = session.get("user_id")
-    user_email = session.get("user_email")
-    user_name  = session.get("user_name")
+    session_email = session.get("user_email")
+    body_email    = (data.get("user_email") or "").strip().lower()
+    user_email, user_name = _get_verified_user(session_email, body_email)
 
     answer = ask_llm(question)
 
-    if user_id:
+    if user_email:
         result_box = []
         t = Thread(target=_save_to_db, args=(user_email, user_name, chat_id, title, question, answer, result_box), daemon=True)
         t.start()
