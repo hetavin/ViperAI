@@ -53,13 +53,19 @@ def chat():
 
     answer = ask_llm(question)
 
-    if user_email:
-        result_box = []
-        t = Thread(target=_save_to_db, args=(user_email, user_name, chat_id, title, question, answer, result_box), daemon=True)
-        t.start()
-        t.join(timeout=8)
-        if not chat_id and result_box:
-            chat_id = result_box[0]
+    result_box = []
+    _save_to_db(
+        user_email,
+        user_name,
+        chat_id,
+        title,
+        question,
+        answer,
+        result_box
+    )
+
+    if not chat_id and result_box:
+        chat_id = result_box[0]
 
     return jsonify({"answer": answer, "chat_id": chat_id})
 
