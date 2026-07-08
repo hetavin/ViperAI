@@ -84,7 +84,7 @@ function switchPage(pageId) {
 
   if (pageId === 'dashboard') updateDashboard();
   if (pageId === 'pdfs') renderPdfList();
-  if (pageId === 'chats') renderChatUserList();
+  if (pageId === 'chats') loadChatUsers();
   if (pageId === 'users') loadViperUsers();
 }
 
@@ -113,25 +113,28 @@ function updateDashboard() {
     `).join('');
   }
 
-  const chatsDiv = document.getElementById('recentChats');
-  if (userChats.length === 0) {
-    chatsDiv.innerHTML = `<div class="empty-state" style="height:180px;"><i class="fas fa-comments"></i><span style="font-size:13px;">No chat activity yet</span></div>`;
-  } else {
-    chatsDiv.innerHTML = userChats.slice(-4).reverse().map(c => {
-      const color = getAvatarColor(c.name);
-      const lastMsg = c.messages[c.messages.length - 1];
-      return `
-        <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg-elevated);border-radius:10px;">
-          <div style="width:32px;height:32px;background:${color.bg};color:${color.fg};border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;font-family:'Space Grotesk';">${getInitials(c.name)}</div>
-          <div style="flex:1;min-width:0;">
-            <div style="font-size:13px;font-weight:500;">${c.name}</div>
-            <div style="font-size:11px;color:var(--fg-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${lastMsg ? lastMsg.text.slice(0, 50) + '...' : ''}</div>
+  fetch('/api/admin/users').then(r => r.json()).then(data => {
+    const chatsDiv = document.getElementById('recentChats');
+    const users = (data.users || []).filter(u => u.chat_count > 0).slice(0, 4);
+    if (users.length === 0) {
+      chatsDiv.innerHTML = `<div class="empty-state" style="height:180px;"><i class="fas fa-comments"></i><span style="font-size:13px;">No chat activity yet</span></div>`;
+    } else {
+      chatsDiv.innerHTML = users.map(u => {
+        const name = u.name || u.email;
+        const color = getAvatarColor(name);
+        return `
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg-elevated);border-radius:10px;">
+            <div style="width:32px;height:32px;background:${color.bg};color:${color.fg};border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;font-family:'Space Grotesk';">${getInitials(name)}</div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:13px;font-weight:500;">${esc(name)}</div>
+              <div style="font-size:11px;color:var(--fg-muted);">${u.message_count} messages</div>
+            </div>
+            <span style="font-size:11px;color:var(--fg-muted);white-space:nowrap;">${formatDate(u.created_at)}</span>
           </div>
-          <span style="font-size:11px;color:var(--fg-muted);white-space:nowrap;">${formatDate(c.startedAt)}</span>
-        </div>
-      `;
-    }).join('');
-  }
+        `;
+      }).join('');
+    }
+  });
 }
 
 const uploadZone = document.getElementById('uploadZone');
@@ -252,41 +255,46 @@ function renderPdfList() {
 function filterPdfs() { renderPdfList(); }
 
 let selectedChatId = null;
+let chatPageUsers = [];
+
+async function loadChatUsers() {
+  const list = document.getElementById('chatUserList');
+  list.innerHTML = `<div class="empty-state" style="height:200px;"><i class="fas fa-spinner fa-spin"></i><span style="font-size:13px;">Loading...</span></div>`;
+  try {
+    const res = await fetch('/api/admin/users');
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    chatPageUsers = (data.users || []).filter(u => u.chat_count > 0);
+    document.getElementById('chatCount').textContent = chatPageUsers.length;
+    renderChatUserList();
+  } catch (err) {
+    list.innerHTML = `<div class="empty-state" style="height:200px;"><i class="fas fa-circle-exclamation" style="color:var(--danger);"></i><span style="font-size:13px;color:var(--danger);">Failed to load</span></div>`;
+  }
+}
 
 function renderChatUserList() {
   const list = document.getElementById('chatUserList');
   const search = document.getElementById('chatSearch').value.toLowerCase();
-  document.getElementById('chatCount').textContent = userChats.length;
-
-  const filtered = userChats.filter(c =>
-    c.name.toLowerCase().includes(search) || c.email.toLowerCase().includes(search)
+  const filtered = chatPageUsers.filter(u =>
+    (u.name || '').toLowerCase().includes(search) || u.email.toLowerCase().includes(search)
   );
-
   if (filtered.length === 0) {
-    list.innerHTML = `<div class="empty-state" style="height:300px;background:var(--bg-card);border:1px solid var(--border);border-radius:14px;">
-      <i class="fas fa-user-group"></i>
-      <span style="font-size:13px;">${search ? 'No users match your search' : 'No user conversations found'}</span>
-    </div>`;
+    list.innerHTML = `<div class="empty-state" style="height:300px;background:var(--bg-card);border:1px solid var(--border);border-radius:14px;"><i class="fas fa-user-group"></i><span style="font-size:13px;">${search ? 'No users match your search' : 'No user conversations found'}</span></div>`;
     return;
   }
-
-  list.innerHTML = filtered.map(c => {
-    const color = getAvatarColor(c.name);
-    const lastMsg = c.messages[c.messages.length - 1];
-    const isActive = c.id === selectedChatId;
+  list.innerHTML = filtered.map(u => {
+    const name = u.name || u.email;
+    const color = getAvatarColor(name);
     return `
-      <div class="chat-user-item ${isActive ? 'active' : ''}" onclick="selectChat('${c.id}')">
-        <div class="user-avatar" style="background:${color.bg};color:${color.fg};">${getInitials(c.name)}</div>
+      <div class="chat-user-item" onclick="selectChatUser('${u.email}', '${esc(name)}', '${getInitials(name)}', '${color.bg}', '${color.fg}')">
+        <div class="user-avatar" style="background:${color.bg};color:${color.fg};">${getInitials(name)}</div>
         <div style="flex:1;min-width:0;">
-          <div style="font-size:14px;font-weight:600;">${c.name}</div>
-          <div style="font-size:12px;color:var(--fg-muted);">${c.email}</div>
-          <div style="font-size:12px;color:var(--fg-muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-            ${lastMsg ? (lastMsg.role === 'user' ? 'You: ' : 'Bot: ') + lastMsg.text.slice(0, 40) + '...' : 'No messages'}
-          </div>
+          <div style="font-size:14px;font-weight:600;">${esc(name)}</div>
+          <div style="font-size:12px;color:var(--fg-muted);">${u.email}</div>
         </div>
         <div style="text-align:right;flex-shrink:0;">
-          <div style="font-size:11px;color:var(--fg-muted);">${formatDate(c.startedAt)}</div>
-          <div style="font-size:11px;color:var(--fg-muted);margin-top:4px;">${c.messages.length} msgs</div>
+          <div style="font-size:11px;color:var(--fg-muted);">${formatDate(u.created_at)}</div>
+          <div style="font-size:11px;color:var(--fg-muted);margin-top:4px;">${u.chat_count} chats</div>
         </div>
       </div>
     `;
@@ -295,38 +303,61 @@ function renderChatUserList() {
 
 function filterChats() { renderChatUserList(); }
 
-function selectChat(chatId) {
-  selectedChatId = chatId;
-  const chat = userChats.find(c => c.id === chatId);
-  if (!chat) return;
-
-  const color = getAvatarColor(chat.name);
-
+async function selectChatUser(email, displayName, initials, bg, fg) {
   document.getElementById('chatHeader').style.display = 'block';
-  document.getElementById('chatAvatar').style.background = color.bg;
-  document.getElementById('chatAvatar').style.color = color.fg;
-  document.getElementById('chatAvatar').textContent = getInitials(chat.name);
-  document.getElementById('chatUserName').textContent = chat.name;
-  document.getElementById('chatUserEmail').textContent = chat.email;
-  document.getElementById('chatMsgCount').innerHTML = `<i class="fas fa-message"></i> ${chat.messages.length} messages`;
+  document.getElementById('chatAvatar').style.background = bg;
+  document.getElementById('chatAvatar').style.color = fg;
+  document.getElementById('chatAvatar').textContent = initials;
+  document.getElementById('chatUserName').textContent = displayName;
+  document.getElementById('chatUserEmail').textContent = email;
 
   const msgContainer = document.getElementById('chatMessages');
-  msgContainer.innerHTML = chat.messages.map((m, i) => {
-    const isUser = m.role === 'user';
-    return `
-      <div style="display:flex;flex-direction:column;align-items:${isUser ? 'flex-end' : 'flex-start'};">
-        <div class="chat-bubble ${isUser ? 'bubble-user' : 'bubble-bot'}" style="animation-delay:${i * 0.05}s;">
-          ${m.text}
-        </div>
-        <div style="font-size:10px;color:var(--fg-muted);margin-top:4px;padding:0 4px;">
-          ${isUser ? chat.name : 'Bot'} · ${formatTime(m.time)}
-        </div>
-      </div>
-    `;
-  }).join('');
+  msgContainer.innerHTML = `<div class="empty-state"><i class="fas fa-spinner fa-spin"></i><span style="font-size:13px;">Loading chats...</span></div>`;
 
-  setTimeout(() => msgContainer.scrollTop = msgContainer.scrollHeight, 100);
-  renderChatUserList();
+  try {
+    const res = await fetch(`/api/admin/users/${encodeURIComponent(email)}/chats`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    const chats = data.chats || [];
+    document.getElementById('chatMsgCount').innerHTML = `<i class="fas fa-message"></i> ${chats.length} chats`;
+    if (chats.length === 0) {
+      msgContainer.innerHTML = `<div class="empty-state"><i class="fas fa-comments"></i><span style="font-size:14px;">No chats found</span></div>`;
+      return;
+    }
+    selectChatById(chats[0].id, email);
+  } catch (err) {
+    msgContainer.innerHTML = `<div class="empty-state"><i class="fas fa-circle-exclamation" style="color:var(--danger);"></i><span style="font-size:14px;color:var(--danger);">Failed to load chats</span></div>`;
+  }
+}
+
+async function selectChatById(chatId, userEmail) {
+  selectedChatId = chatId;
+  const msgContainer = document.getElementById('chatMessages');
+  msgContainer.innerHTML = `<div class="empty-state"><i class="fas fa-spinner fa-spin"></i><span style="font-size:13px;">Loading messages...</span></div>`;
+  try {
+    const res = await fetch(`/api/admin/chats/${chatId}/messages`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    const messages = data.messages || [];
+    if (!messages.length) {
+      msgContainer.innerHTML = `<div class="empty-state"><i class="fas fa-inbox"></i><span style="font-size:14px;">No messages</span></div>`;
+      return;
+    }
+    msgContainer.innerHTML = messages.map((m, i) => {
+      const isUser = m.role === 'user';
+      return `
+        <div style="display:flex;flex-direction:column;align-items:${isUser ? 'flex-end' : 'flex-start'};">
+          <div class="chat-bubble ${isUser ? 'bubble-user' : 'bubble-bot'}" style="animation-delay:${i * 0.05}s;">${m.message}</div>
+          <div style="font-size:10px;color:var(--fg-muted);margin-top:4px;padding:0 4px;">
+            ${isUser ? (userEmail || 'User') : 'ViperAI'} · ${formatTime(m.created_at)}
+          </div>
+        </div>
+      `;
+    }).join('');
+    setTimeout(() => msgContainer.scrollTop = msgContainer.scrollHeight, 100);
+  } catch (err) {
+    msgContainer.innerHTML = `<div class="empty-state"><i class="fas fa-circle-exclamation" style="color:var(--danger);"></i><span style="font-size:14px;color:var(--danger);">Failed to load messages</span></div>`;
+  }
 }
 
 function openDeleteModal(type, id, name) {

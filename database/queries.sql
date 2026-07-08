@@ -37,3 +37,6 @@ SELECT id,user_email,title
 FROM chats
 ORDER BY id DESC
 LIMIT 10;
+
+SELECT * FROM chat_messages
+WHERE email = 'vtsl22@gmail.com';
