@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BotBase — AI Assistant</title>
+<!-- jQuery 3.7.1 -->
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../static/css/style.css">
+</head>
+<body>
+
+<div class="tc" id="toasts"></div>
+
+<!-- Rename Modal -->
+<div class="mo" id="rnMo">
+  <div class="mo-c">
+    <h3 style="font-size:14px;font-weight:700">Rename Chat</h3>
+    <p style="font-size:12px;color:var(--fg3);margin-top:2px">New title for this conversation</p>
+    <input class="mo-i" id="rnIn" maxlength="80">
+    <div class="mo-r">
+      <button class="mg-g" onclick="closeMo('rnMo')">Cancel</button>
+      <button class="mg-a" onclick="saveRn()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Modal -->
+<div class="mo" id="dlMo">
+  <div class="mo-c">
+    <h3 style="font-size:14px;font-weight:700" id="dlTitle">Delete Chat</h3>
+    <p style="font-size:12px;color:var(--fg3);margin-top:2px;margin-bottom:12px" id="dlText">This conversation will be permanently deleted.</p>
+    <div class="mo-r">
+      <button class="mg-g" onclick="closeMo('dlMo')">Cancel</button>
+      <button class="mg-d" id="dlConfirm" onclick="doDel()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<div style="display:flex;height:100vh">
+
+  <!-- ===== SIDEBAR ===== -->
+  <aside class="sb" id="sb">
+    <div class="sb-hd">
+      <div class="sb-logo">
+        <div class="sb-ico"><i class="fas fa-robot"></i></div>
+        <span class="sb-name">BotBase</span>
+      </div>
+      <button class="sb-x" onclick="togSB()"><i class="fas fa-xmark"></i></button>
+    </div>
+
+    <button class="sb-new" onclick="newChat()"><i class="fas fa-plus" style="font-size:11px"></i> New Chat</button>
+
+    <div class="sb-sr">
+      <i class="fas fa-search"></i>
+      <input placeholder="Search chats..." id="sbSrch" oninput="renderSB()">
+    </div>
+
+    <div class="sb-lbl">Conversations</div>
+    <div class="sb-list" id="sbList"></div>
+
+    <!-- Settings panel (collapsible) -->
+    <div class="sb-set-panel" id="setPanel">
+      <div class="sb-set-inner">
+        <div class="set-group">
+          <div class="set-group-title">Appearance</div>
+          <div class="set-row">
+            <div class="set-row-info">
+              <div class="set-row-label">Dark Mode</div>
+              <div class="set-row-desc">Switch between dark and light</div>
+            </div>
+            <label class="toggle" id="themeToggle">
+              <input type="checkbox" checked onchange="setTheme(this.checked?'dark':'light')">
+              <div class="toggle-track"></div>
+              <div class="toggle-dot"></div>
+            </label>
+          </div>
+          <div class="theme-dots" style="padding-left:2px">
+            <div class="theme-dot theme-dot-dark active" id="dotDark" onclick="setTheme('dark')" title="Dark"></div>
+            <div class="theme-dot theme-dot-light" id="dotLight" onclick="setTheme('light')" title="Light"></div>
+          </div>
+        </div>
+        <div class="set-group">
+          <div class="set-group-title">Chat</div>
+          <div class="set-row">
+            <div class="set-row-info">
+              <div class="set-row-label">Compact Messages</div>
+              <div class="set-row-desc">Reduce spacing between messages</div>
+            </div>
+            <label class="toggle">
+              <input type="checkbox" id="compactToggle" onchange="togCompact(this.checked)">
+              <div class="toggle-track"></div>
+              <div class="toggle-dot"></div>
+            </label>
+          </div>
+        </div>
+        <div class="set-divider"></div>
+        <button class="set-clear-btn" onclick="clearAll()">
+          <i class="fas fa-trash-can"></i>
+          <span>Clear All Chats</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Profile -->
+    <div class="sb-profile">
+      <button class="sb-profile-btn" id="pfBtn" onclick="togProfile()">
+        <div class="sb-profile-av" id="pfAv">U</div>
+        <div class="sb-profile-info">
+          <div class="sb-profile-name" id="pfName">User</div>
+          <div class="sb-profile-email" id="pfEmail">user@botbase.io</div>
+        </div>
+        <i class="fas fa-chevron-up sb-profile-arrow"></i>
+      </button>
+      <div class="sb-profile-drop" id="pfDrop">
+        <div class="sb-profile-drop-inner">
+          <div class="pf-field">
+            <div class="pf-label">Display Name</div>
+            <input class="mo-i" style="margin-top:4px" id="pfNameIn" value="User" oninput="updateProfile()">
+          </div>
+          <div class="pf-field" style="margin-bottom:0">
+            <div class="pf-label">Email</div>
+            <input class="mo-i" style="margin-top:4px" id="pfEmailIn" value="user@botbase.io" oninput="updateProfile()">
+          </div>
+          <div class="pf-stats">
+            <div class="pf-stat">
+              <div class="pf-stat-n" id="pfStatChats">0</div>
+              <div class="pf-stat-l">Chats</div>
+            </div>
+            <div class="pf-stat">
+              <div class="pf-stat-n" id="pfStatMsgs">0</div>
+              <div class="pf-stat-l">Messages</div>
+            </div>
+            <div class="pf-stat">
+              <div class="pf-stat-n" id="pfStatDays">0</div>
+              <div class="pf-stat-l">Days</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ===== MAIN ===== -->
+  <div class="ct">
+    <div class="tb">
+      <button class="tb-ham" onclick="togSB()"><i class="fas fa-bars"></i></button>
+      <div class="tb-t" id="tbT">New Chat</div>
+      <!-- <button class="tb-b" id="rnBtn" style="display:none" onclick="openRn()"><i class="fas fa-pen" style="font-size:10px"></i> Rename</button>
+      <button class="tb-b" id="dlBtn" style="display:none" onclick="openDl()"><i class="fas fa-trash-can" style="font-size:10px"></i> Delete</button> -->
+      <!-- Settings gear icon in topbar -->
+      <button class="tb-b" id="setTbBtn" onclick="togSettings()"><i class="fas fa-gear" style="font-size:13px"></i></button>
+    </div>
+    <div class="ms" id="ms">
+      <div class="ms-in" id="msIn"></div>
+    </div>
+    <div class="ia">
+      <div class="ia-w">
+        <div class="ia-box">
+          <textarea class="ia-ta" id="cIn" placeholder="Message BotBase..." rows="1" onkeydown="iKey(event)" oninput="aH(this)"></textarea>
+        </div>
+        <button class="ia-s" id="sBtn" onclick="send()" disabled><i class="fas fa-arrow-up"></i></button>
+      </div>
+      <div class="ia-h">BotBase answers from uploaded documents. Verify important information.</div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="../static/js/script.js"></script>
+</body>
+</html>
