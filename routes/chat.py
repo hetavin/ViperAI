@@ -6,24 +6,6 @@ from connect import db_connection
 chat_bp = Blueprint("chat", __name__)
 
 
-def _get_verified_user(session_email, body_email):
-    """Return (email, name) if user exists in DB, else (None, None)."""
-    email = session_email or body_email
-    if not email:
-        return None, None
-    conn = db_connection()
-    if not conn:
-        return None, None
-    try:
-        with conn.cursor() as cur:
-            cur.execute("SELECT name FROM users WHERE email = %s", (email,))
-            row = cur.fetchone()
-        return (email, row['name']) if row else (None, None)
-    except Exception:
-        return None, None
-    finally:
-        conn.close()
-
 
 def _save_to_db(user_email, user_name, chat_id, title, question, answer, result_box):
     conn = db_connection()
@@ -65,7 +47,9 @@ def chat():
 
     session_email = session.get("user_email")
     body_email    = (data.get("user_email") or "").strip().lower()
-    user_email, user_name = _get_verified_user(session_email, body_email)
+    body_name     = (data.get("user_name") or "").strip()
+    user_email    = session_email or body_email
+    user_name     = session.get("user_name") or body_name
 
     answer = ask_llm(question)
 
@@ -82,7 +66,7 @@ def chat():
 
 @chat_bp.route("/api/chats")
 def get_user_chats():
-    user_email = session.get("user_email")
+    user_email = session.get("user_email") or request.args.get("email", "").strip().lower()
     if not user_email:
         return jsonify({"chats": []})
 
