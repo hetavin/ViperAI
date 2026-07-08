@@ -62,7 +62,7 @@ def get_user_chats(user_email):
     try:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT id, title, created_at FROM chats WHERE user_email = %s ORDER BY created_at DESC",
+                "SELECT id, title, created_at FROM chats WHERE user_email=%s",
                 (user_email,)
             )
             chats = cur.fetchall()
