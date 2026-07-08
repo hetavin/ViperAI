@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BotBase — AI Assistant</title>
+<title>ViperAI — AI Assistant</title>
 <!-- jQuery 3.7.1 -->
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
@@ -13,6 +13,22 @@
 <body>
 
 <div class="tc" id="toasts"></div>
+
+<!-- Auth Popup -->
+<div class="mo" id="authPopup">
+  <div class="mo-c" style="max-width:380px;text-align:center">
+    <div style="width:52px;height:52px;background:var(--accent-d);border-radius:14px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px">
+      <i class="fas fa-robot" style="font-size:22px;color:var(--accent)"></i>
+    </div>
+    <h3 style="font-size:17px;font-weight:700;margin-bottom:6px">Welcome to ViperAI</h3>
+    <p style="font-size:12.5px;color:var(--fg3);line-height:1.6;margin-bottom:20px">Create a free account to start chatting, save your conversations, and get the most out of ViperAI.</p>
+    <div class="pop_btn">
+    <a href="/login?register=1" class="sb-auth-register" style="display:flex;"><i class="fas fa-user-plus"></i> Create Account</a>
+    <a href="/login" class="sb-auth-login" style="display:flex"><i class="fas fa-right-to-bracket"></i> Sign In</a>
+    </div>
+    <button id="maybeLaterBtn" onclick="if(!document.getElementById('authPopup').classList.contains('locked'))document.getElementById('authPopup').classList.remove('on')" style="margin-top:14px;background:none;border:none;color:var(--fg4);font-size:12px;cursor:pointer;font-family:inherit">Maybe later</button>
+  </div>
+</div>
 
 <!-- Rename Modal -->
 <div class="mo" id="rnMo">
@@ -46,7 +62,7 @@
     <div class="sb-hd">
       <div class="sb-logo">
         <div class="sb-ico"><i class="fas fa-robot"></i></div>
-        <span class="sb-name">BotBase</span>
+        <span class="sb-name">Viper AI</span>
       </div>
       <button class="sb-x" onclick="togSB()"><i class="fas fa-xmark"></i></button>
     </div>
@@ -101,29 +117,34 @@
           <i class="fas fa-trash-can"></i>
           <span>Clear All Chats</span>
         </button>
+        <div class="set-divider" id="setLogoutDivider" style="display:none"></div>
+        <button class="set-logout-btn" id="setLogoutBtn" style="display:none" onclick="doLogout()">
+          <i class="fas fa-right-from-bracket"></i>
+          <span>Sign Out</span>
+        </button>
       </div>
     </div>
 
-    <!-- Profile -->
-    <div class="sb-profile">
+    <!-- Guest: Sign In / Sign Up -->
+     <div class="account_btn" id="sbAuth">
+    <div class="sb-auth">
+      <a href="/login" class="sb-auth-login"><i class="fas fa-right-to-bracket"></i> Sign In</a>
+      <a href="/login?register=1" class="sb-auth-register"><i class="fas fa-user-plus"></i> Sign UP</a>
+    </div>
+    </div>
+
+    <!-- Profile (logged in) -->
+    <div class="sb-profile" id="sbProfile" style="display:none">
       <button class="sb-profile-btn" id="pfBtn" onclick="togProfile()">
         <div class="sb-profile-av" id="pfAv">U</div>
         <div class="sb-profile-info">
           <div class="sb-profile-name" id="pfName">User</div>
-          <div class="sb-profile-email" id="pfEmail">user@botbase.io</div>
+          <div class="sb-profile-email" id="pfEmail">user@example.com</div>
         </div>
         <i class="fas fa-chevron-up sb-profile-arrow"></i>
       </button>
       <div class="sb-profile-drop" id="pfDrop">
         <div class="sb-profile-drop-inner">
-          <div class="pf-field">
-            <div class="pf-label">Display Name</div>
-            <input class="mo-i" style="margin-top:4px" id="pfNameIn" value="User" oninput="updateProfile()">
-          </div>
-          <div class="pf-field" style="margin-bottom:0">
-            <div class="pf-label">Email</div>
-            <input class="mo-i" style="margin-top:4px" id="pfEmailIn" value="user@botbase.io" oninput="updateProfile()">
-          </div>
           <div class="pf-stats">
             <div class="pf-stat">
               <div class="pf-stat-n" id="pfStatChats">0</div>
@@ -138,6 +159,7 @@
               <div class="pf-stat-l">Days</div>
             </div>
           </div>
+          <button class="sb-logout-btn" onclick="doLogout()"><i class="fas fa-right-from-bracket"></i> Sign Out</button>
         </div>
       </div>
     </div>
@@ -159,11 +181,11 @@
     <div class="ia">
       <div class="ia-w">
         <div class="ia-box">
-          <textarea class="ia-ta" id="cIn" placeholder="Message BotBase..." rows="1" onkeydown="iKey(event)" oninput="aH(this)"></textarea>
+          <textarea class="ia-ta" id="cIn" placeholder="Message ViperAI..." rows="1" onkeydown="iKey(event)" oninput="aH(this)"></textarea>
         </div>
         <button class="ia-s" id="sBtn" onclick="send()" disabled><i class="fas fa-arrow-up"></i></button>
       </div>
-      <div class="ia-h">BotBase answers from uploaded documents. Verify important information.</div>
+      <div class="ia-h">ViperAI answers from uploaded documents. Verify important information.</div>
     </div>
   </div>
 </div>

@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ChatBot Dashboard</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../static/css/admin.css">
+</head>
+<body>
+
+<!-- Background atmosphere -->
+<div class="bg-glow" style="top:-100px;left:-100px;background:var(--accent);"></div>
+<div class="bg-glow" style="bottom:-150px;right:-100px;background:var(--success);"></div>
+
+<!-- Floating particles -->
+<div class="particle" style="left:10%;top:30%;animation-delay:0s;"></div>
+<div class="particle" style="left:25%;top:60%;animation-delay:1.5s;"></div>
+<div class="particle" style="left:55%;top:20%;animation-delay:3s;"></div>
+<div class="particle" style="left:75%;top:70%;animation-delay:4.5s;"></div>
+<div class="particle" style="left:90%;top:40%;animation-delay:6s;"></div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- Delete confirmation modal -->
+<div class="modal-overlay" id="deleteModal">
+  <div class="modal">
+    <h3 style="font-size:18px;margin-bottom:8px;">Confirm Delete</h3>
+    <p style="color:var(--fg-muted);font-size:14px;margin-bottom:24px;" id="deleteModalText">Are you sure you want to delete this PDF? This action cannot be undone.</p>
+    <div style="display:flex;gap:10px;justify-content:flex-end;">
+      <button class="btn-ghost" onclick="closeDeleteModal()">Cancel</button>
+      <button class="btn-accent" style="background:var(--danger);color:#fff;" id="confirmDeleteBtn" onclick="confirmDelete()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- App layout -->
+<div style="display:flex;height:100vh;position:relative;z-index:1;">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="width:36px;height:36px;background:var(--accent);border-radius:10px;display:flex;align-items:center;justify-content:center;">
+          <i class="fas fa-robot" style="color:#0e0f13;font-size:16px;"></i>
+        </div>
+        <div class="brand-text">
+          <div style="font-family:'Space Grotesk';font-weight:700;font-size:16px;color:var(--fg);">BotBase</div>
+          <div style="font-size:11px;color:var(--fg-muted);margin-top:-2px;">Chatbot Dashboard</div>
+        </div>
+      </div>
+    </div>
+
+    <nav style="flex:1;padding:16px 0;overflow-y:auto;">
+      <div class="nav-section-title" style="padding:4px 20px 8px;font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--fg-muted);font-weight:600;">Main</div>
+      <div class="nav-item active" data-page="dashboard" onclick="switchPage('dashboard')">
+        <i class="fas fa-chart-pie"></i><span class="nav-text">Dashboard</span>
+      </div>
+      <div class="nav-item" data-page="pdfs" onclick="switchPage('pdfs')">
+        <i class="fas fa-file-pdf"></i><span class="nav-text">PDF Manager</span>
+      </div>
+      <div class="nav-item" data-page="chats" onclick="switchPage('chats')">
+        <i class="fas fa-comments"></i><span class="nav-text">User Chats</span>
+      </div>
+
+      <div class="nav-section-title" style="padding:20px 20px 8px;font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--fg-muted);font-weight:600;">System</div>
+      <div class="nav-item" data-page="settings" onclick="switchPage('settings')">
+        <i class="fas fa-cog"></i><span class="nav-text">Settings</span>
+      </div>
+      <div class="nav-item" data-page="users" onclick="switchPage('users')">
+        <i class="fas fa-users-gear"></i><span class="nav-text">ViperAI Users</span>
+      </div>
+    </nav>
+
+    <div style="padding:16px 20px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;">
+      <div style="width:34px;height:34px;background:var(--accent-dim);border-radius:50%;display:flex;align-items:center;justify-content:center;">
+        <i class="fas fa-user" style="color:var(--accent);font-size:13px;"></i>
+      </div>
+      <div class="brand-text">
+        <div style="font-size:13px;font-weight:600;">Admin</div>
+        <div style="font-size:11px;color:var(--fg-muted);">admin@botbase.io</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main-content" id="mainContent">
+
+    <!-- DASHBOARD PAGE -->
+    <section class="page active" id="page-dashboard">
+      <div style="margin-bottom:32px;">
+        <h1 style="font-size:28px;font-weight:700;margin-bottom:4px;">Dashboard</h1>
+        <p style="color:var(--fg-muted);font-size:14px;">Overview of your chatbot performance and data</p>
+      </div>
+
+      <!-- Stats -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-bottom:32px;">
+        <div class="stat-card amber">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+            <span style="color:var(--fg-muted);font-size:13px;font-weight:500;">Total PDFs</span>
+            <div style="width:36px;height:36px;background:var(--accent-dim);border-radius:10px;display:flex;align-items:center;justify-content:center;">
+              <i class="fas fa-file-pdf" style="color:var(--accent);font-size:14px;"></i>
+            </div>
+          </div>
+          <div style="font-size:32px;font-weight:700;font-family:'Space Grotesk';" id="statPdfs">0</div>
+          <div style="font-size:12px;color:var(--success);margin-top:4px;"><i class="fas fa-arrow-up" style="font-size:10px;"></i> Knowledge base</div>
+        </div>
+
+        <div class="stat-card green">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+            <span style="color:var(--fg-muted);font-size:13px;font-weight:500;">Total Users</span>
+            <div style="width:36px;height:36px;background:rgba(62,201,122,0.12);border-radius:10px;display:flex;align-items:center;justify-content:center;">
+              <i class="fas fa-users" style="color:var(--success);font-size:14px;"></i>
+            </div>
+          </div>
+          <div style="font-size:32px;font-weight:700;font-family:'Space Grotesk';" id="statUsers">0</div>
+          <div style="font-size:12px;color:var(--success);margin-top:4px;"><i class="fas fa-arrow-up" style="font-size:10px;"></i> Active chatters</div>
+        </div>
+
+        <div class="stat-card blue">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+            <span style="color:var(--fg-muted);font-size:13px;font-weight:500;">Total Messages</span>
+            <div style="width:36px;height:36px;background:rgba(62,168,224,0.12);border-radius:10px;display:flex;align-items:center;justify-content:center;">
+              <i class="fas fa-message" style="color:var(--info);font-size:14px;"></i>
+            </div>
+          </div>
+          <div style="font-size:32px;font-weight:700;font-family:'Space Grotesk';" id="statMessages">0</div>
+          <div style="font-size:12px;color:var(--info);margin-top:4px;"><i class="fas fa-arrow-up" style="font-size:10px;"></i> All conversations</div>
+        </div>
+
+        <div class="stat-card red">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+            <span style="color:var(--fg-muted);font-size:13px;font-weight:500;">Bot Status</span>
+            <div style="width:36px;height:36px;background:rgba(62,201,122,0.12);border-radius:10px;display:flex;align-items:center;justify-content:center;">
+              <i class="fas fa-bolt" style="color:var(--success);font-size:14px;"></i>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div style="font-size:32px;font-weight:700;font-family:'Space Grotesk';">Live</div>
+            <div class="pulse-dot"></div>
+          </div>
+          <div style="font-size:12px;color:var(--success);margin-top:4px;"><i class="fas fa-circle-check" style="font-size:10px;"></i> Running normally</div>
+        </div>
+      </div>
+
+      <!-- Recent activity -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+        <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:22px;">
+          <h3 style="font-size:16px;font-weight:600;margin-bottom:16px;">Recent Uploads</h3>
+          <div id="recentUploads" style="display:flex;flex-direction:column;gap:10px;">
+            <div class="empty-state" style="height:180px;">
+              <i class="fas fa-cloud-arrow-up"></i>
+              <span style="font-size:13px;">No PDFs uploaded yet</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:22px;">
+          <h3 style="font-size:16px;font-weight:600;margin-bottom:16px;">Recent Chats</h3>
+          <div id="recentChats" style="display:flex;flex-direction:column;gap:10px;">
+            <div class="empty-state" style="height:180px;">
+              <i class="fas fa-comments"></i>
+              <span style="font-size:13px;">No chat activity yet</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PDF MANAGER PAGE -->
+    <section class="page" id="page-pdfs">
+      <div style="margin-bottom:28px;display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <h1 style="font-size:28px;font-weight:700;margin-bottom:4px;">PDF Manager</h1>
+          <p style="color:var(--fg-muted);font-size:14px;">Upload and manage knowledge base documents</p>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span class="badge badge-amber"><i class="fas fa-database"></i> <span id="pdfCount">0</span> documents</span>
+        </div>
+      </div>
+
+      <!-- Upload zone -->
+      <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+        <input type="file" id="fileInput" accept=".pdf" multiple style="display:none;" onchange="handleFileSelect(event)">
+        <div class="upload-icon"><i class="fas fa-cloud-arrow-up"></i></div>
+        <div style="font-size:16px;font-weight:600;margin-bottom:6px;">Drop PDF files here or click to browse</div>
+        <div style="color:var(--fg-muted);font-size:13px;">Supports PDF files up to 50MB each</div>
+      </div>
+
+      <!-- Upload progress area -->
+      <div id="uploadProgress" style="margin-top:16px;display:none;"></div>
+
+      <!-- PDF list -->
+      <div style="margin-top:24px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+          <h3 style="font-size:16px;font-weight:600;">Uploaded Documents</h3>
+          <div style="position:relative;">
+            <i class="fas fa-search" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--fg-muted);font-size:13px;"></i>
+            <input class="search-input" placeholder="Search documents..." style="width:240px;" id="pdfSearch" oninput="filterPdfs()">
+          </div>
+        </div>
+        <div id="pdfList" style="display:flex;flex-direction:column;gap:10px;">
+          <div class="empty-state" style="height:200px;background:var(--bg-card);border:1px solid var(--border);border-radius:14px;">
+            <i class="fas fa-folder-open"></i>
+            <span style="font-size:13px;">Your document library is empty</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- USER CHATS PAGE -->
+    <section class="page" id="page-chats">
+      <div style="margin-bottom:24px;display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <h1 style="font-size:28px;font-weight:700;margin-bottom:4px;">User Chats</h1>
+          <p style="color:var(--fg-muted);font-size:14px;">Browse and review conversations by user</p>
+        </div>
+        <span class="badge badge-info"><i class="fas fa-comments"></i> <span id="chatCount">0</span> conversations</span>
+      </div>
+
+      <div class="chat-panel">
+        <!-- User list -->
+        <div class="chat-list-panel">
+          <div style="position:relative;margin-bottom:4px;">
+            <i class="fas fa-search" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--fg-muted);font-size:13px;"></i>
+            <input class="search-input" placeholder="Search by name or email..." id="chatSearch" oninput="filterChats()">
+          </div>
+          <div id="chatUserList" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:8px;">
+            <div class="empty-state" style="height:300px;background:var(--bg-card);border:1px solid var(--border);border-radius:14px;">
+              <i class="fas fa-user-group"></i>
+              <span style="font-size:13px;">No user conversations found</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Conversation view -->
+        <div class="chat-conversation-panel">
+          <div id="chatHeader" style="padding:18px 24px;border-bottom:1px solid var(--border);display:none;">
+            <div style="display:flex;align-items:center;gap:12px;">
+              <div class="user-avatar" id="chatAvatar" style="background:var(--accent-dim);color:var(--accent);"></div>
+              <div>
+                <div style="font-weight:600;font-size:15px;" id="chatUserName"></div>
+                <div style="font-size:12px;color:var(--fg-muted);" id="chatUserEmail"></div>
+              </div>
+              <div style="margin-left:auto;display:flex;align-items:center;gap:8px;">
+                <span class="badge badge-success" id="chatMsgCount"></span>
+              </div>
+            </div>
+          </div>
+          <div class="chat-messages" id="chatMessages">
+            <div class="empty-state">
+              <i class="fas fa-arrow-left"></i>
+              <span style="font-size:14px;">Select a user to view their conversation</span>
+              <span style="font-size:12px;">Search by name or email on the left panel</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SETTINGS PAGE -->
+    <section class="page" id="page-settings">
+      <div style="margin-bottom:28px;">
+        <h1 style="font-size:28px;font-weight:700;margin-bottom:4px;">Settings</h1>
+        <p style="color:var(--fg-muted);font-size:14px;">Configure your chatbot behavior</p>
+      </div>
+
+      <div style="max-width:600px;display:flex;flex-direction:column;gap:20px;">
+        <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:22px;">
+          <h3 style="font-size:16px;font-weight:600;margin-bottom:16px;">Chatbot Configuration</h3>
+          <div style="display:flex;flex-direction:column;gap:16px;">
+            <div>
+              <label style="font-size:13px;font-weight:500;color:var(--fg-muted);display:block;margin-bottom:6px;">Bot Name</label>
+              <input class="search-input" style="padding-left:14px;" value="Assistant" id="botName">
+            </div>
+            <div>
+              <label style="font-size:13px;font-weight:500;color:var(--fg-muted);display:block;margin-bottom:6px;">Welcome Message</label>
+              <textarea class="search-input" style="padding-left:14px;min-height:80px;resize:vertical;" id="botWelcome">Hello! I'm your PDF assistant. Ask me anything about the uploaded documents.</textarea>
+            </div>
+            <div>
+              <label style="font-size:13px;font-weight:500;color:var(--fg-muted);display:block;margin-bottom:6px;">Max Response Length</label>
+              <input class="search-input" style="padding-left:14px;" type="number" value="500" id="maxResponse">
+            </div>
+          </div>
+        </div>
+
+        <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:22px;">
+          <h3 style="font-size:16px;font-weight:600;margin-bottom:16px;">Data Management</h3>
+          <div style="display:flex;flex-direction:column;gap:12px;">
+            <button class="btn-ghost" style="text-align:left;display:flex;align-items:center;gap:10px;" onclick="exportData()">
+              <i class="fas fa-download" style="width:16px;"></i> Export All Chat Data (JSON)
+            </button>
+            <button class="btn-ghost" style="text-align:left;display:flex;align-items:center;gap:10px;color:var(--danger);border-color:rgba(224,85,85,0.3);" onclick="clearAllData()">
+              <i class="fas fa-trash" style="width:16px;"></i> Clear All Data
+            </button>
+          </div>
+        </div>
+
+      <button class="btn-accent" style="align-self:flex-start;" onclick="saveSettings()">
+        <i class="fas fa-save" style="margin-right:6px;"></i> Save Settings
+      </button>
+    </div>
+  </section>
+
+  <!-- VIPERAI USERS PAGE -->
+  <section class="page" id="page-users">
+    <div style="margin-bottom:28px;display:flex;align-items:center;justify-content:space-between;">
+      <div>
+        <h1 style="font-size:28px;font-weight:700;margin-bottom:4px;">ViperAI Users</h1>
+        <p style="color:var(--fg-muted);font-size:14px;">Registered users and their chat history</p>
+      </div>
+      <span class="badge badge-success"><i class="fas fa-users"></i> <span id="viperUserCount">0</span> users</span>
+    </div>
+
+    <div class="chat-panel">
+      <div class="chat-list-panel">
+        <div style="position:relative;margin-bottom:4px;">
+          <i class="fas fa-search" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--fg-muted);font-size:13px;"></i>
+          <input class="search-input" placeholder="Search users by email..." id="viperUserSearch" oninput="renderViperUserList()">
+        </div>
+        <div id="viperUserList" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:8px;">
+          <div class="empty-state" style="height:300px;background:var(--bg-card);border:1px solid var(--border);border-radius:14px;">
+            <i class="fas fa-users-gear"></i>
+            <span style="font-size:13px;">No users found</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="chat-conversation-panel">
+        <div id="viperChatHeader" style="padding:18px 24px;border-bottom:1px solid var(--border);display:none;">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div class="user-avatar" id="viperChatAvatar" style="background:var(--accent-dim);color:var(--accent);"></div>
+            <div>
+              <div style="font-weight:600;font-size:15px;" id="viperChatUserName"></div>
+              <div style="font-size:12px;color:var(--fg-muted);" id="viperChatUserEmail"></div>
+            </div>
+            <div style="margin-left:auto;display:flex;align-items:center;gap:8px;">
+              <span class="badge badge-info" id="viperChatCount"></span>
+            </div>
+          </div>
+        </div>
+        <div id="viperChatTabs" style="padding:10px 16px;border-bottom:1px solid var(--border);display:none;gap:8px;flex-wrap:wrap;"></div>
+        <div class="chat-messages" id="viperChatMessages">
+          <div class="empty-state">
+            <i class="fas fa-arrow-left"></i>
+            <span style="font-size:14px;">Select a user to view their chats</span>
+            <span style="font-size:12px;">Search by email on the left panel</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  </main>
+</div>
+
+<script src="../static/js/admin.js"></script>
+</body>
+</html>

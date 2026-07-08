@@ -215,7 +215,7 @@ function togSettings() {/* ===== STATE ===== */
         const mb = compact ? '10px' : '20px';
         $el.html(c.messages.map(m => {
             if (m.role === 'user') return `<div class="mg" style="margin-bottom:${mb}"><div class="mg-h"><div class="mg-a u">${ini(profile.name)}</div><span class="mg-n">${esc(profile.name)}</span><span class="mg-t">${ft(m.time)}</span></div><div class="mg-b"><p>${esc(m.text)}</p></div></div>`;
-            return `<div class="mg" style="margin-bottom:${mb}"><div class="mg-h"><div class="mg-a b"><i class="fas fa-robot" style="font-size:10px"></i></div><span class="mg-n">BotBase</span><span class="mg-t">${ft(m.time)}</span></div><div class="mg-b">${rt(m.text)}</div></div>`;
+            return `<div class="mg" style="margin-bottom:${mb}"><div class="mg-h"><div class="mg-a b"><i class="fas fa-robot" style="font-size:10px"></i></div><span class="mg-n">ViperAI</span><span class="mg-t">${ft(m.time)}</span></div><div class="mg-b">${rt(m.text)}</div></div>`;
         }).join(''));
         hlCode($el[0]);
         $('#ms').scrollTop(1e6);
@@ -252,14 +252,21 @@ function togSettings() {/* ===== STATE ===== */
         $inp.val('').css('height', 'auto'); $('#sBtn').prop('disabled', true);
         renderMsgs(chat); renderSB(); updateProfileStats();
         gen = true; const $inner = $('#msIn'); const $tip = $('<div>').addClass('ty').attr('id', 'typI').html('<span></span><span></span><span></span>'); $inner.append($tip); $('#ms').scrollTop(1e6);
+        const payload = {
+            message: txt,
+            email: profile.email,
+            name: profile.name
+        };
+        if (chat.serverChatId) payload.chat_id = chat.serverChatId;
         $.ajax({
             url: '/chat',
             method: 'POST',
             contentType: 'application/json',
-            data: JSON.stringify({ message: txt })
+            data: JSON.stringify(payload)
         })
             .done(function (d) {
                 const resp = d.answer || 'Sorry, no answer was returned.';
+                if (d.chat_id && !chat.serverChatId) { chat.serverChatId = d.chat_id; save(); }
                 chat.messages.push({ role: 'bot', text: resp, time: new Date().toISOString() }); save(); gen = false; renderMsgs(chat); updateProfileStats();
             })
             .fail(function () {
@@ -385,8 +392,8 @@ function renderMsgs(c) {
     if (!c.messages.length) { showWelcome(); return }
     const mb = compact ? '10px' : '20px';
     el.innerHTML = c.messages.map(m => {
-        if (m.role === 'user') return `<div class="mg" style="margin-bottom:${mb}"><div class="mg-h"><div class="mg-a u">${ini(profile.name)}</div><span class="mg-n">${esc(profile.name)}</span><span class="mg-t">${ft(m.time)}</span></div><div class="mg-b"><p>${esc(m.text)}</p></div></div>`;
-        return `<div class="mg" style="margin-bottom:${mb}"><div class="mg-h"><div class="mg-a b"><i class="fas fa-robot" style="font-size:10px"></i></div><span class="mg-n">BotBase</span><span class="mg-t">${ft(m.time)}</span></div><div class="mg-b">${rt(m.text)}</div></div>`;
+        if (m.role === 'user') return `<div class="mg mg-user" style="margin-bottom:${mb}"><div class="mg-h"><div class="mg-a u">${ini(profile.name)}</div><span class="mg-n">${esc(profile.name)}</span><span class="mg-t">${ft(m.time)}</span></div><div class="mg-b"><p>${esc(m.text)}</p></div></div>`;
+        return `<div class="mg" style="margin-bottom:${mb}"><div class="mg-h"><div class="mg-a b"><i class="fas fa-robot" style="font-size:10px"></i></div><span class="mg-n">ViperAI</span><span class="mg-t">${ft(m.time)}</span></div><div class="mg-b">${rt(m.text)}</div></div>`;
     }).join('');
     hlCode(el);
     document.getElementById('ms').scrollTop = 1e6;
@@ -417,7 +424,7 @@ function aH(el) { el.style.height = 'auto'; el.style.height = Math.min(el.scroll
 function send() {
     const inp = document.getElementById('cIn'), txt = inp.value.trim();
     if (!txt || gen) return;
-    if (!activeId) { const c = { id: gid(), title: txt.length > 52 ? txt.slice(0, 49) + '...' : txt, messages: [], createdAt: new Date().toISOString() }; chats.unshift(c); activeId = c.id; document.getElementById('tbT').textContent = c.title; document.getElementById('rnBtn').style.display = 'flex'; document.getElementById('dlBtn').style.display = 'flex' }
+    if (!activeId) { const c = { id: gid(), title: txt.length > 52 ? txt.slice(0, 49) + '...' : txt, messages: [], createdAt: new Date().toISOString() }; chats.unshift(c); activeId = c.id; document.getElementById('tbT').textContent = c.title; }
     const chat = chats.find(c => c.id === activeId); if (!chat) return;
     chat.messages.push({ role: 'user', text: txt, time: new Date().toISOString() }); save();
     inp.value = ''; inp.style.height = 'auto'; document.getElementById('sBtn').disabled = true;
@@ -426,11 +433,12 @@ function send() {
     fetch('/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: txt })
+        body: JSON.stringify({ message: txt, chat_id: chat.serverChatId || null, title: chat.title })
     })
         .then(r => r.json())
         .then(d => {
             const resp = d.answer || 'Sorry, no answer was returned.';
+            if (d.chat_id && !chat.serverChatId) { chat.serverChatId = d.chat_id; save(); }
             chat.messages.push({ role: 'bot', text: resp, time: new Date().toISOString() }); save(); gen = false; renderMsgs(chat); updateProfileStats();
         })
         .catch(() => {
@@ -462,7 +470,7 @@ function clearAll() {
 
 /* ===== MODAL ===== */
 function closeMo(id) { document.getElementById(id).classList.remove('on'); delId = null; rnId = null }
-document.querySelectorAll('.mo').forEach(m => { m.addEventListener('click', e => { if (e.target === m) { m.classList.remove('on'); delId = null; rnId = null } }) });
+document.querySelectorAll('.mo').forEach(m => { m.addEventListener('click', e => { if (e.target === m && m.id !== 'authPopup') { m.classList.remove('on'); delId = null; rnId = null } }) });
 
 /* Close sidebar on outside click (mobile) */
 document.addEventListener('click', e => {
@@ -473,11 +481,59 @@ document.addEventListener('click', e => {
 load();
 setTheme(localStorage.getItem('bb_theme') || 'dark');
 if (localStorage.getItem('bb_compact') === '1') { compact = true; document.getElementById('compactToggle').checked = true }
-document.getElementById('pfNameIn').value = profile.name;
-document.getElementById('pfEmailIn').value = profile.email;
-document.getElementById('pfName').textContent = profile.name;
-document.getElementById('pfEmail').textContent = profile.email;
-document.getElementById('pfAv').textContent = ini(profile.name);
 if (chats.length > 0) selChat(chats[0].id); else showWelcome();
 updateProfileStats();
 document.getElementById('cIn').focus();
+
+fetch('/api/auth/me').then(r => r.json()).then(u => {
+    if (u.logged_in) {
+        profile.name  = u.name;
+        profile.email = u.email;
+        document.getElementById('pfName').textContent  = u.name;
+        document.getElementById('pfEmail').textContent = u.email;
+        document.getElementById('pfAv').textContent    = ini(u.name);
+        document.getElementById('sbAuth').style.display    = 'none';
+        document.getElementById('sbProfile').style.display = 'block';
+        document.getElementById('setLogoutBtn').style.display    = 'flex';
+        document.getElementById('setLogoutDivider').style.display = 'block';
+        // Load chats from DB and replace localStorage
+        fetch('/api/chats').then(r => r.json()).then(data => {
+            if (data.chats && data.chats.length) {
+                chats = data.chats.map(c => ({
+                    id: 'db_' + c.id,
+                    serverChatId: c.id,
+                    title: c.title,
+                    createdAt: c.createdAt,
+                    messages: c.messages
+                }));
+                save();
+                selChat(chats[0].id);
+                updateProfileStats();
+                renderSB();
+            }
+        });
+    } else {
+        document.getElementById('sbAuth').style.display    = 'block';
+        document.getElementById('sbProfile').style.display = 'none';
+        document.getElementById('authPopup').classList.add('on');
+        let popCount = 1;
+        const popTimer = setInterval(() => {
+            popCount++;
+            document.getElementById('authPopup').classList.add('on');
+            if (popCount >= 2) {
+                clearInterval(popTimer);
+                document.getElementById('authPopup').classList.add('locked');
+                document.getElementById('maybeLaterBtn').style.display = 'none';
+            }
+        }, 1 * 60 * 1000);
+    }
+});
+
+function doLogout() {
+    fetch('/api/auth/logout', { method: 'POST' })
+        .then(r => r.json())
+        .then(d => {
+            chats = []; activeId = null; save();
+            window.location.href = d.redirect;
+        });
+}

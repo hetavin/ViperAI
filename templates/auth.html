@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">  
+    <title>ViperAI — Sign In</title>
+    <!-- <script src="https://cdn.tailwindcss.com"></script> -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="../static/css/auth.css">
+</head>
+
+<body>
+
+    <div class="tc" id="toasts"></div>
+
+    <div class="theme-toggle-auth" title="Toggle theme">
+        <i class="fas fa-moon" id="themeAuthIcon"></i>
+        <span id="themeAuthLabel">Dark</span>
+    </div>
+
+    <div id="authScreen">
+        <div class="auth-card">
+            <div style="display:flex;align-items:center;gap:9px;margin-bottom:24px">
+                <div
+                    style="width:40px;height:40px;background:var(--accent);border-radius:11px;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 20px rgba(224,159,62,.2)">
+                    <i class="fas fa-robot" style="color:#0c0d10;font-size:17px"></i>
+                </div>
+                <div>
+                    <div style="font-family:'Space Grotesk';font-weight:700;font-size:19px">ViperAI</div>
+                    <div style="font-size:10.5px;color:var(--fg3)">AI Document Assistant</div>
+                </div>
+            </div>
+
+            <!-- Login Form -->
+            <div class="auth-form active" id="loginForm">
+                <h3 style="font-size:20px;font-weight:700;margin-bottom:3px">Welcome back</h3>
+                <p style="color:var(--fg3);font-size:13px;margin-bottom:22px">Sign in to continue to your assistant</p>
+                <form novalidate>
+                    <div class="fg">
+                        <label class="fg-label">Email Address</label>
+                        <div class="fg-wrap">
+                            <input type="email" class="fg-input" id="lEmail" placeholder="you@example.com"
+                                autocomplete="email">
+                            <i class="fas fa-envelope fi"></i>
+                        </div>
+                        <div class="fe" id="eErr"><i class="fas fa-circle-exclamation"></i><span></span></div>
+                    </div>
+                    <div class="fg">
+                        <label class="fg-label">Password</label>
+                        <div class="fg-wrap">
+                            <input type="password" class="fg-input" id="lPass" placeholder="Enter your password"
+                                autocomplete="current-password">
+                            <i class="fas fa-lock fi"></i>
+                            <button type="button" class="pt" onclick="togPass('lPass','lEye')"><i class="fas fa-eye"
+                                    id="lEye"></i></button>
+                        </div>
+                        <div class="fe" id="pErr"><i class="fas fa-circle-exclamation"></i><span></span></div>
+                    </div>
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+                        <label class="ck"><input type="checkbox" id="lRem">
+                            <div class="ck-b"><i class="fas fa-check"></i></div><span
+                                style="font-size:12.5px;color:var(--fg3)">Remember me</span>
+                        </label>
+                        <a class="auth-link">Forgot password?</a>
+                    </div>
+                    <button type="submit" class="bl" id="lBtn"><span class="bt">Sign In</span>
+                        <div class="sp"></div>
+                    </button>
+                </form>
+                <div style="text-align:center;margin-top:18px;font-size:12.5px;color:var(--fg4)">
+                    Don't have an account? <a class="auth-link">Create one</a>
+                </div>
+            </div>
+
+            <!-- Register Form -->
+            <div class="auth-form" id="registerForm">
+                <h3 style="font-size:20px;font-weight:700;margin-bottom:3px">Create account</h3>
+                <p style="color:var(--fg3);font-size:13px;margin-bottom:22px">Sign up to start chatting with ViperAI</p>
+                <form novalidate>
+                    <div class="fg">
+                        <label class="fg-label">Full Name</label>
+                        <div class="fg-wrap">
+                            <input type="text" class="fg-input" id="rName" placeholder="John Doe" autocomplete="name">
+                            <i class="fas fa-user fi"></i>
+                        </div>
+                        <div class="fe" id="rnErr"><i class="fas fa-circle-exclamation"></i><span></span></div>
+                    </div>
+                    <div class="fg">
+                        <label class="fg-label">Email Address</label>
+                        <div class="fg-wrap">
+                            <input type="email" class="fg-input" id="rEmail" placeholder="you@example.com"
+                                autocomplete="email">
+                            <i class="fas fa-envelope fi"></i>
+                        </div>
+                        <div class="fe" id="reErr"><i class="fas fa-circle-exclamation"></i><span></span></div>
+                    </div>
+                    <div class="fg">
+                        <label class="fg-label">Password</label>
+                        <div class="fg-wrap">
+                            <input type="password" class="fg-input" id="rPass" placeholder="Create a password"
+                                autocomplete="new-password">
+                            <i class="fas fa-lock fi"></i>
+                            <button type="button" class="pt" onclick="togPass('rPass','rEye')"><i class="fas fa-eye"
+                                    id="rEye"></i></button>
+                        </div>
+                        <div class="fe" id="rpErr"><i class="fas fa-circle-exclamation"></i><span></span></div>
+                    </div>
+                    <div class="fg">
+                        <label class="fg-label">Confirm Password</label>
+                        <div class="fg-wrap">
+                            <input type="password" class="fg-input" id="rPassC" placeholder="Confirm your password"
+                                autocomplete="new-password">
+                            <i class="fas fa-lock fi"></i>
+                            <button type="button" class="pt" onclick="togPass('rPassC','rEyeC')"><i class="fas fa-eye"
+                                    id="rEyeC"></i></button>
+                        </div>
+                        <div class="fe" id="rpcErr"><i class="fas fa-circle-exclamation"></i><span></span></div>
+                    </div>
+                    <div style="margin-bottom:20px">
+                        <label class="ck"><input type="checkbox" id="rAgree">
+                            <div class="ck-b"><i class="fas fa-check"></i></div><span
+                                style="font-size:12.5px;color:var(--fg3)">I agree to the Terms of Service and Privacy
+                                Policy</span>
+                        </label>
+                    </div>
+                    <button type="submit" class="bl" id="rBtn"><span class="bt">Create Account</span>
+                        <div class="sp"></div>
+                    </button>
+                </form>
+                <div style="text-align:center;margin-top:18px;font-size:12.5px;color:var(--fg4)">
+                    Already have an account? <a class="auth-link">Sign in</a>
+                </div>
+            </div>
+
+            <!-- Forgot Password: Step 1 - Email -->
+            <div class="auth-form" id="forgotEmailForm">
+                <button class="auth-back"><i class="fas fa-arrow-left" style="font-size:11px"></i>
+                    Back to login</button>
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+                    <div
+                        style="width:40px;height:40px;background:var(--accent-d);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                        <i class="fas fa-envelope-circle-check" style="color:var(--accent);font-size:17px"></i>
+                    </div>
+                    <h3 style="font-size:19px;font-weight:700">Forgot Password?</h3>
+                </div>
+                <p style="color:var(--fg3);font-size:13px;margin-bottom:22px;line-height:1.5">Enter your email address
+                    and we'll send you a verification code to reset your password.</p>
+                <form onsubmit="doSendOtp(event)" novalidate>
+                    <div class="fg">
+                        <label class="fg-label">Email Address</label>
+                        <div class="fg-wrap">
+                            <input type="email" class="fg-input" id="fpEmail" placeholder="you@example.com"
+                                autocomplete="email">
+                            <i class="fas fa-envelope fi"></i>
+                        </div>
+                        <div class="fe" id="fpEErr"><i class="fas fa-circle-exclamation"></i><span></span></div>
+                    </div>
+                    <button type="submit" class="bl" id="fpSendBtn"><span class="bt">Send Verification Code</span>
+                        <div class="sp"></div>
+                    </button>
+                </form>
+            </div>
+
+            <!-- Forgot Password: Step 2 - OTP -->
+            <div class="auth-form" id="forgotOtpForm">
+                <button class="auth-back"><i class="fas fa-arrow-left"
+                        style="font-size:11px"></i> Back</button>
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+                    <div
+                        style="width:40px;height:40px;background:var(--accent-d);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                        <i class="fas fa-shield-halved" style="color:var(--accent);font-size:17px"></i>
+                    </div>
+                    <h3 style="font-size:19px;font-weight:700">Verify Code</h3>
+                </div>
+                <p style="color:var(--fg3);font-size:13px;margin-bottom:22px;line-height:1.5">We sent a 6-digit code to
+                    <strong style="color:var(--fg2)" id="fpOtpEmail"></strong>. Enter it below.</p>
+                <form onsubmit="doVerifyOtp(event)" novalidate>
+                    <div class="otp-wrap" id="otpWrap">
+                        <input type="text" class="otp-box" maxlength="1" inputmode="numeric"
+                            autocomplete="one-time-code" data-idx="0">
+                        <input type="text" class="otp-box" maxlength="1" inputmode="numeric"
+                            autocomplete="one-time-code" data-idx="1">
+                        <input type="text" class="otp-box" maxlength="1" inputmode="numeric"
+                            autocomplete="one-time-code" data-idx="2">
+                        <input type="text" class="otp-box" maxlength="1" inputmode="numeric"
+                            autocomplete="one-time-code" data-idx="3">
+                        <input type="text" class="otp-box" maxlength="1" inputmode="numeric"
+                            autocomplete="one-time-code" data-idx="4">
+                        <input type="text" class="otp-box" maxlength="1" inputmode="numeric"
+                            autocomplete="one-time-code" data-idx="5">
+                    </div>
+                    <div class="otp-hint">
+                        <div class="fe" id="otpErr" style="margin:0"><i
+                                class="fas fa-circle-exclamation"></i><span></span></div>
+                        <button type="button" class="otp-resend" id="resendBtn" onclick="resendOtp()" disabled>Resend in
+                            <span id="resendTimer">30</span>s</button>
+                    </div>
+                    <div style="height:16px"></div>
+                    <button type="submit" class="bl" id="fpVerifyBtn"><span class="bt">Verify Code</span>
+                        <div class="sp"></div>
+                    </button>
+                </form>
+            </div>
+
+            <!-- Forgot Password: Step 3 - New Password -->
+            <div class="auth-form" id="forgotNewPassForm">
+                <button class="auth-back"><i class="fas fa-arrow-left"
+                        style="font-size:11px"></i> Back</button>
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+                    <div
+                        style="width:40px;height:40px;background:var(--accent-d);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                        <i class="fas fa-key" style="color:var(--accent);font-size:17px"></i>
+                    </div>
+                    <h3 style="font-size:19px;font-weight:700">Reset Password</h3>
+                </div>
+                <p style="color:var(--fg3);font-size:13px;margin-bottom:22px;line-height:1.5">Create a new password for
+                    your account. Make sure it's strong and secure.</p>
+                <form onsubmit="doResetPassword(event)" novalidate>
+                    <div class="fg">
+                        <label class="fg-label">New Password</label>
+                        <div class="fg-wrap">
+                            <input type="password" class="fg-input" id="fpNewPass" placeholder="Enter new password"
+                                autocomplete="new-password">
+                            <i class="fas fa-lock fi"></i>
+                            <button type="button" class="pt" onclick="togPass('fpNewPass','fpEye1')"><i
+                                    class="fas fa-eye" id="fpEye1"></i></button>
+                        </div>
+                        <div class="fe" id="fnpErr"><i class="fas fa-circle-exclamation"></i><span></span></div>
+                    </div>
+                    <div class="fg">
+                        <label class="fg-label">Confirm New Password</label>
+                        <div class="fg-wrap">
+                            <input type="password" class="fg-input" id="fpConfPass" placeholder="Confirm new password"
+                                autocomplete="new-password">
+                            <i class="fas fa-lock fi"></i>
+                            <button type="button" class="pt" onclick="togPass('fpConfPass','fpEye2')"><i
+                                    class="fas fa-eye" id="fpEye2"></i></button>
+                        </div>
+                        <div class="fe" id="fcpErr"><i class="fas fa-circle-exclamation"></i><span></span></div>
+                    </div>
+                    <button type="submit" class="bl" id="fpResetBtn"><span class="bt">Change Password</span>
+                        <div class="sp"></div>
+                    </button>
+                </form>
+            </div>
+
+            <!-- Forgot Password: Success -->
+            <div class="auth-form" id="forgotSuccessForm">
+                <div style="text-align:center;padding:20px 0">
+                    <div
+                        style="width:64px;height:64px;background:rgba(62,201,122,.1);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 20px">
+                        <i class="fas fa-circle-check" style="font-size:28px;color:var(--green)"></i>
+                    </div>
+                    <h3 style="font-size:20px;font-weight:700;margin-bottom:6px">Password Reset Successful</h3>
+                    <p style="color:var(--fg3);font-size:13px;margin-bottom:28px;line-height:1.5">Your password has been
+                        changed successfully. You can now sign in with your new password.</p>
+                    <button class="bl" style="max-width:200px;margin:0 auto;display:block"><span
+                            class="bt">Back to Sign In</span></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="../static/js/auth.js"></script>
+</body>
+
+</html>
