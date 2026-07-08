@@ -1,1 +1,0 @@
-Result: <pymysql.connections.Connection object at 0x000002954190E350> in 0.51s
