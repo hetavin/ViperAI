@@ -54,7 +54,7 @@ def get_users():
         conn.close()
 
 
-@admin_dp.route('/api/admin/users/<path:user_email>/chats')
+@admin_dp.route('/api/admin/users/<user_email>/chats')
 def get_user_chats(user_email):
     conn = db_connection()
     if not conn:
