@@ -109,6 +109,7 @@ def login_api():
         if not password:
             return jsonify({"error": "Incorrect password"}), 401
 
+        session.permanent    = True
         session["user_id"]    = user["id"]
         session["user_name"]  = user["name"]
         session["user_email"] = email

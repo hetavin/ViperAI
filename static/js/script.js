@@ -361,6 +361,14 @@ function installApp() {
 function dismissInstall() { document.getElementById('installPopup').style.display = 'none'; }
 window.addEventListener('appinstalled', () => { document.getElementById('installPopup').style.display = 'none'; });
 
+/* ===== GUEST CLEANUP ON LEAVE ===== */
+window.addEventListener('pagehide', () => {
+    if (!profile.email || profile.email === 'user@botbase.io') {
+        localStorage.removeItem('bb_chats');
+        localStorage.removeItem('bb_profile');
+    }
+});
+
 /* ===== INIT ===== */
 setTheme(localStorage.getItem('bb_theme') || 'dark');
 if (localStorage.getItem('bb_compact') === '1') { compact = true; document.getElementById('compactToggle').checked = true; }

@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 from config import _load_env
 _load_env()
 
@@ -18,6 +19,7 @@ app.config.update(
     SESSION_COOKIE_SECURE=bool(is_production),
     SESSION_COOKIE_SAMESITE='None' if is_production else 'Lax',
     SESSION_COOKIE_HTTPONLY=True,
+    PERMANENT_SESSION_LIFETIME=timedelta(days=30),
 )
 
 @app.route('/static/manifest.json')
