@@ -1466,6 +1466,20 @@ h4 {
   display: flex
 }
 
+#authPopup {
+  z-index: 400;
+}
+
+#authPopup.locked {
+  background: var(--modal-bg);
+  cursor: default;
+  pointer-events: auto;
+}
+
+#authPopup.locked .mo-c {
+  pointer-events: auto;
+}
+
 .mo-c {
   background: var(--bg-card);
   border: 1px solid var(--bdr2);
