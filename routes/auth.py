@@ -36,7 +36,7 @@ def me():
 @auth_bp.route("/api/auth/logout", methods=["POST"])
 def logout():
     session.clear()
-    return jsonify({"redirect": "/login"}), 200
+    return jsonify({"redirect": "/"}), 200
 
 
 @auth_bp.route("/login")
