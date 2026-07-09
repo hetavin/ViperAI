@@ -47,12 +47,17 @@
     box-sizing: border-box
 }
 
+html {
+    overscroll-behavior: none;
+}
+
 body {
     font-family: 'DM Sans', sans-serif;
     background: var(--bg);
     color: var(--fg);
     height: 100vh;
     overflow: hidden;
+    overscroll-behavior: none;
     transition: background .3s, color .3s
 }
 

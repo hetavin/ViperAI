@@ -53,6 +53,10 @@
   --toggle-dot: #ffffff;
 }
 
+html {
+  overscroll-behavior: none;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -66,6 +70,7 @@ body {
   color: var(--fg);
   height: 100vh;
   overflow: hidden;
+  overscroll-behavior: none;
   transition: background .3s, color .3s
 }
 
@@ -817,6 +822,7 @@ h4 {
   flex: 1;
   overflow-y: auto;
   background: var(--bg);
+  overscroll-behavior: contain;
   transition: background .3s
 }
 
