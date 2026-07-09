@@ -38,4 +38,4 @@ def index():
 
 @route_bp.route('/admin')
 def admin():
-    return render_template('admin.html')
+    return redirect('/admin/dashboard')

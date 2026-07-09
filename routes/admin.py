@@ -34,7 +34,7 @@ def admin_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         if not _check_admin():
-            return jsonify({'error': 'Forbidden'}), 403
+            return redirect('/login')
         return f(*args, **kwargs)
     return decorated
 
@@ -42,8 +42,6 @@ def admin_required(f):
 @admin_dp.route('/admin/dashboard')
 @admin_required
 def admin_dashboard():
-    if not _check_admin():
-        return redirect('/')
     return render_template('admin.html')
 
 
