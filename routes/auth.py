@@ -104,7 +104,7 @@ def login_api():
         if not user:
             return jsonify({"error": "No account found. Please register first.", "show_register": True}), 404
 
-        if not password:
+        if password != user["password"]:
             return jsonify({"error": "Incorrect password"}), 401
 
         session.permanent    = True

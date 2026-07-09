@@ -17,6 +17,7 @@ $(document).ready(function () {
     }
 
     function toast(msg, type) {
+        if (!msg) return;
         const icon = type === 'e' ? 'fa-circle-xmark' : 'fa-circle-check';
         const cls  = type === 'e' ? 'tt tt-e' : 'tt tt-s';
         const $t   = $('<div>').addClass(cls).html(`<i class="fas ${icon}"></i> ${msg}`);
@@ -92,7 +93,7 @@ $(document).ready(function () {
 
             success: function (res) {
                 $btn.prop('disabled', false).removeClass('ld');
-                toast(res.message);
+                toast(res.message, 's');
                 setTimeout(() => window.location.href = res.redirect, 1000);
             },
 

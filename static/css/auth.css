@@ -579,7 +579,7 @@ h4 {
     color: var(--fg);
     font-size: 14px;
     font-weight: 500;
-    font-family: 'DM Sans', sans-serif;
+    font-family: 'DM Sans', system-ui, sans-serif;
     text-decoration: none;
     transition: all .2s;
     cursor: pointer;
@@ -589,7 +589,10 @@ h4 {
 
 .btn-google svg {
     flex-shrink: 0;
-    display: block
+    display: block;
+    width: 18px;
+    height: 18px;
+    min-width: 18px
 }
 
 .btn-google:hover {
