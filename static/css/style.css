@@ -756,7 +756,7 @@ h4 {
 }
 
 .tb {
-  padding: 11px 16px;
+  padding: 16px;
   border-bottom: 1px solid var(--bdr);
   display: flex;
   align-items: center;
@@ -1490,7 +1490,6 @@ h4 {
 
   .ia-w {
     max-width: 100%;
-    margin-bottom: 30px;
   }
 
   .mg-b {
@@ -1536,6 +1535,7 @@ h4 {
 
   .ia-w {
     max-width: 100%;
+    margin-bottom: 30px;
   }
 
   .mg-b {
