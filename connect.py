@@ -1,16 +1,19 @@
+import os
 import pymysql.cursors
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
+from config import _load_env
 
+_load_env()
 _executor = ThreadPoolExecutor(max_workers=4)
 
 
 def _connect():
     return pymysql.connect(
-        host="mysql-24dc61de-hetavinpokiya4672-3a92.e.aivencloud.com",
-        user="avnadmin",
-        password="AVNS_WNKhz5moqAbf9Nlo5uq",
-        database="chatboat",
-        port=17627,
+        host=os.environ["DB_HOST"],
+        user=os.environ["DB_USER"],
+        password=os.environ["DB_PASSWORD"],
+        database=os.environ["DB_DATABASE"],
+        port=int(os.environ["DB_PORT"]),
         ssl={"ssl": {}},
         cursorclass=pymysql.cursors.DictCursor,
         connect_timeout=5,
