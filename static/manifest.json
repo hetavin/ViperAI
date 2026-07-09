@@ -1,9 +1,12 @@
 {
+  "id": "/",
   "name": "ViperAI",
   "short_name": "ViperAI",
   "description": "AI Assistant",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "background_color": "#0f172a",
   "theme_color": "#f59e0b",
   "orientation": "portrait",
@@ -11,12 +14,14 @@
     {
       "src": "/static/icons/LOGO_IMG.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
       "src": "/static/icons/LOGO_IMG.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }

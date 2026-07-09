@@ -2,7 +2,7 @@ import os
 from config import _load_env
 _load_env()
 
-from flask import Flask
+from flask import Flask, Response
 
 from routes.routes import route_bp
 from routes.admin import admin_dp
@@ -19,6 +19,13 @@ app.config.update(
     SESSION_COOKIE_SAMESITE='None' if is_production else 'Lax',
     SESSION_COOKIE_HTTPONLY=True,
 )
+
+@app.route('/static/manifest.json')
+def manifest():
+    path = os.path.join(app.static_folder, 'manifest.json')
+    with open(path) as f:
+        data = f.read()
+    return Response(data, mimetype='application/manifest+json')
 
 app.register_blueprint(route_bp)
 app.register_blueprint(admin_dp)
