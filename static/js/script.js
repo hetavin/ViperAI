@@ -361,6 +361,38 @@ function installApp() {
 function dismissInstall() { document.getElementById('installPopup').style.display = 'none'; }
 window.addEventListener('appinstalled', () => { document.getElementById('installPopup').style.display = 'none'; });
 
+/* ===== PULL TO REFRESH ===== */
+(function () {
+    let startY = 0, pulling = false;
+    const threshold = 80;
+    const indicator = document.createElement('div');
+    indicator.id = 'ptr';
+    indicator.innerHTML = '<i class="fas fa-rotate-right"></i>';
+    indicator.style.cssText = 'position:fixed;top:-50px;left:50%;transform:translateX(-50%);transition:top .2s;background:var(--bg2);border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center;z-index:9999;box-shadow:0 2px 8px rgba(0,0,0,.3);';
+    document.body.appendChild(indicator);
+
+    document.addEventListener('touchstart', e => {
+        if (window.scrollY === 0) { startY = e.touches[0].clientY; pulling = true; }
+    }, { passive: true });
+
+    document.addEventListener('touchmove', e => {
+        if (!pulling) return;
+        const dist = e.touches[0].clientY - startY;
+        if (dist > 0 && dist < threshold + 20) {
+            indicator.style.top = Math.min(dist - 40, 16) + 'px';
+            indicator.querySelector('i').style.transform = `rotate(${dist * 3}deg)`;
+        }
+    }, { passive: true });
+
+    document.addEventListener('touchend', e => {
+        if (!pulling) return;
+        pulling = false;
+        const dist = e.changedTouches[0].clientY - startY;
+        indicator.style.top = '-50px';
+        if (dist >= threshold) window.location.reload();
+    });
+}());
+
 /* ===== GUEST CLEANUP ON LEAVE ===== */
 window.addEventListener('pagehide', () => {
     if (!profile.email || profile.email === 'user@botbase.io') {
