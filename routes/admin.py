@@ -2,7 +2,6 @@ from flask import render_template, Blueprint, jsonify, session, redirect, url_fo
 from functools import wraps
 from connect import db_connection
 from urllib.parse import unquote
-from django.contrib.auth.decorators import login_required
 
 admin_dp = Blueprint('admin', __name__)
 
@@ -41,7 +40,7 @@ def admin_required(f):
 
 
 @admin_dp.route('/admin/dashboard')
-@login_required
+@admin_required
 def admin_dashboard():
     if not _check_admin():
         return redirect('/')
