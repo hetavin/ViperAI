@@ -1,4 +1,4 @@
-const CACHE = "viperai-v2";
+const CACHE = "viperai-v3";
 const STATIC = ["/", "/static/css/style.css", "/static/js/script.js"];
 
 self.addEventListener("install", e => {

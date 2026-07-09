@@ -239,14 +239,16 @@ document.addEventListener('click', e => {
 });
 
 /* ===== PWA INSTALL ===== */
+const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
 let _installPrompt = null;
 window.addEventListener('beforeinstallprompt', e => {
     e.preventDefault();
+    if (isStandalone()) return;
     _installPrompt = e;
     setTimeout(() => {
-        document.getElementById('installPopup').style.display = 'block';
+        if (!isStandalone()) document.getElementById('installPopup').style.display = 'block';
         setInterval(() => {
-            if (_installPrompt) document.getElementById('installPopup').style.display = 'block';
+            if (_installPrompt && !isStandalone()) document.getElementById('installPopup').style.display = 'block';
         }, 60000);
     }, 3000);
 });
@@ -304,11 +306,11 @@ fetch('/api/auth/me').then(r => r.json()).then(u => {
     } else {
         document.getElementById('sbAuth').style.display    = 'block';
         document.getElementById('sbProfile').style.display = 'none';
-        document.getElementById('authPopup').classList.add('on');
+        if (!isStandalone()) document.getElementById('authPopup').classList.add('on');
         let popCount = 1;
         const popTimer = setInterval(() => {
             popCount++;
-            document.getElementById('authPopup').classList.add('on');
+            if (!isStandalone()) document.getElementById('authPopup').classList.add('on');
             if (popCount >= 2) {
                 clearInterval(popTimer);
                 document.getElementById('authPopup').classList.add('locked');
