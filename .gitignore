@@ -5,3 +5,5 @@ __pycache__/
 .idea/
 connect.py
 database.sql
+
+client_secret_753484986012-ocojhoc6glnfrr0kajv4nt6lb9tc72gb.apps.googleusercontent.com.json

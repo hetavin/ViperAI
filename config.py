@@ -1,7 +1,9 @@
 import os
 
 
-def _load_env(path=".env"):
+def _load_env(path=None):
+    if path is None:
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
     try:
         with open(path, encoding="utf-8") as f:
             for line in f:

@@ -4,6 +4,7 @@ from config import _load_env
 _load_env()
 
 from flask import Flask, Response
+from authlib.integrations.flask_client import OAuth
 
 from routes.routes import route_bp
 from routes.admin import admin_dp
@@ -21,6 +22,18 @@ app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     PERMANENT_SESSION_LIFETIME=timedelta(days=30),
 )
+
+oauth = OAuth(app)
+oauth.register(
+    name='google',
+    client_id=os.environ.get('GOOGLE_CLIENT_ID'),
+    client_secret=os.environ.get('GOOGLE_CLIENT_SECRET'),
+    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+    client_kwargs={'scope': 'openid email profile'},
+)
+
+# make oauth accessible in auth blueprint
+app.extensions['oauth'] = oauth
 
 @app.route('/static/manifest.json')
 def manifest():

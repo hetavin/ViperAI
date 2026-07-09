@@ -1,6 +1,4 @@
-from flask import Blueprint, jsonify, render_template, request, session
-# from werkzeug.security import generate_password_hash, check_password_hash
-
+from flask import Blueprint, jsonify, render_template, request, session, redirect, url_for, current_app
 from connect import db_connection
 
 auth_bp = Blueprint('auth', __name__)
@@ -117,5 +115,51 @@ def login_api():
         first = user["name"].split()[0].capitalize()
         redirect_url = "/admin/dashboard" if user["role"] == "admin" else "/"
         return jsonify({"message": f"Welcome back, {first}!", "redirect": redirect_url}), 200
+    finally:
+        conn.close()
+
+
+@auth_bp.route("/api/auth/google")
+def google_login():
+    oauth = current_app.extensions['oauth']
+    redirect_uri = url_for('auth.google_callback', _external=True)
+    return oauth.google.authorize_redirect(redirect_uri)
+
+
+@auth_bp.route("/api/auth/google/callback")
+def google_callback():
+    oauth = current_app.extensions['oauth']
+    token = oauth.google.authorize_access_token()
+    user_info = token.get('userinfo')
+    if not user_info:
+        return redirect('/login?error=google_failed')
+
+    email = user_info['email'].lower()
+    name  = user_info.get('name', email.split('@')[0])
+
+    conn = db_connection()
+    if not conn:
+        return redirect('/login?error=db_failed')
+
+    try:
+        _ensure_users_table(conn)
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT id, name, role FROM users WHERE email = %s", (email,))
+            user = cursor.fetchone()
+            if not user:
+                cursor.execute(
+                    "INSERT INTO users (name, email, password) VALUES (%s, %s, %s)",
+                    (name, email, '__google__')
+                )
+                conn.commit()
+                cursor.execute("SELECT id, name, role FROM users WHERE email = %s", (email,))
+                user = cursor.fetchone()
+
+        session.permanent    = True
+        session["user_id"]    = user["id"]
+        session["user_name"]  = user["name"]
+        session["user_email"] = email
+        session["user_role"]  = user["role"]
+        return redirect("/admin/dashboard" if user["role"] == "admin" else "/")
     finally:
         conn.close()
