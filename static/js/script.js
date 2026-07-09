@@ -123,10 +123,11 @@ function renderSB() {
 
 /* ===== CHAT ===== */
 function selChat(id) {
+    if (!profile.email || profile.email === 'user@botbase.io') {
+        chats = chats.filter(c => c.id === id); save();
+    }
     activeId = id; const c = chats.find(x => x.id === id); if (!c) return;
     document.getElementById('tbT').textContent = c.title;
-    // document.getElementById('rnBtn').style.display = 'flex';
-    // document.getElementById('dlBtn').style.display = 'flex';
     renderMsgs(c); renderSB();
 }
 function showWelcome() {
@@ -175,7 +176,11 @@ function aH(el) { el.style.height = 'auto'; el.style.height = Math.min(el.scroll
 function send() {
     const inp = document.getElementById('cIn'), txt = inp.value.trim();
     if (!txt || gen) return;
-    if (!activeId) { const c = { id: gid(), title: txt.length > 52 ? txt.slice(0, 49) + '...' : txt, messages: [], createdAt: new Date().toISOString() }; chats.unshift(c); activeId = c.id; document.getElementById('tbT').textContent = c.title; }
+    if (!activeId) {
+        const c = { id: gid(), title: txt.length > 52 ? txt.slice(0, 49) + '...' : txt, messages: [], createdAt: new Date().toISOString() };
+        if (!profile.email || profile.email === 'user@botbase.io') { chats = []; }
+        chats.unshift(c); activeId = c.id; document.getElementById('tbT').textContent = c.title;
+    }
     const chat = chats.find(c => c.id === activeId); if (!chat) return;
     chat.messages.push({ role: 'user', text: txt, time: new Date().toISOString() }); save();
     inp.value = ''; inp.style.height = 'auto'; document.getElementById('sBtn').disabled = true;
@@ -198,7 +203,12 @@ function send() {
 }
 
 /* ===== NEW / RENAME / DELETE ===== */
-function newChat() { showWelcome(); document.getElementById('cIn').focus() }
+function newChat() {
+    if (!profile.email || profile.email === 'user@botbase.io') {
+        chats = []; save();
+    }
+    showWelcome(); document.getElementById('cIn').focus()
+}
 // function openRn() { if (!activeId) return; rnId = activeId; const c = chats.find(x => x.id === activeId); document.getElementById('rnIn').value = c ? c.title : ''; document.getElementById('rnMo').classList.add('on'); setTimeout(() => document.getElementById('rnIn').focus(), 60) }
 function saveRn() { if (!rnId) return; const c = chats.find(x => x.id === rnId), v = document.getElementById('rnIn').value.trim(); if (c && v) { c.title = v; save(); document.getElementById('tbT').textContent = v; renderSB(); toast('Chat renamed') } closeMo('rnMo') }
 document.getElementById('rnIn').addEventListener('keydown', e => { if (e.key === 'Enter') saveRn(); if (e.key === 'Escape') closeMo('rnMo') });
@@ -230,6 +240,7 @@ document.addEventListener('click', e => {
 
 /* ===== INIT ===== */
 load();
+if (!profile.email || profile.email === 'user@botbase.io') { chats = []; save(); }
 setTheme(localStorage.getItem('bb_theme') || 'dark');
 if (localStorage.getItem('bb_compact') === '1') { compact = true; document.getElementById('compactToggle').checked = true }
 if (chats.length > 0) selChat(chats[0].id); else showWelcome();

@@ -1,5 +1,4 @@
 let pdfs = [];
-let userChats = [];
 let viperUsers = [];
 let deleteTarget = { type: '', id: null };
 
@@ -36,7 +35,11 @@ function formatDate(iso) {
 }
 
 function formatTime(iso) {
-  return new Date(iso).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  const d = new Date(iso);
+  const today = new Date();
+  const isToday = d.toDateString() === today.toDateString();
+  if (isToday) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
 function esc(t) {
@@ -55,10 +58,6 @@ function getAvatarColor(name) {
   return avatarColors[Math.abs(hash) % avatarColors.length];
 }
 
-function saveData() {
-  localStorage.setItem('botbase_data', JSON.stringify({ pdfs, userChats }));
-}
-
 function showToast(message, type = 'success') {
   const container = document.getElementById('toastContainer');
   const toast = document.createElement('div');
@@ -67,12 +66,6 @@ function showToast(message, type = 'success') {
   toast.innerHTML = `<i class="fas ${icons[type]}"></i> ${message}`;
   container.appendChild(toast);
   setTimeout(() => toast.remove(), 3200);
-}
-
-function seedDemoData() {
-  pdfs = [];
-  userChats = [];
-  saveData();
 }
 
 function switchPage(pageId) {
@@ -586,5 +579,4 @@ function renderViperChatMessages(messages) {
   setTimeout(() => msgContainer.scrollTop = msgContainer.scrollHeight, 100);
 }
 
-seedDemoData();
 updateDashboard();

@@ -98,9 +98,9 @@ def get_user_chats():
                 result.append({
                     "id": c["id"],
                     "title": c["title"],
-                    "createdAt": c["created_at"].isoformat(),
+                    "createdAt": c["created_at"].isoformat() + '+00:00',
                     "messages": [
-                        {"role": m["role"], "text": m["message"], "time": m["created_at"].isoformat()}
+                        {"role": m["role"], "text": m["message"], "time": m["created_at"].isoformat() + '+00:00'}
                         for m in messages
                     ]
                 })

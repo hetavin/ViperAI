@@ -6,9 +6,14 @@ CREATE TABLE IF NOT EXISTS users (
     name VARCHAR(255) NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
+    role ENUM('admin', 'user') NOT NULL DEFAULT 'user',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
+
+
+INSERT INTO users (name, email, password, role)
+VALUES ('viper', 'viper@gmail.com', 'Viper@123', 'admin');
 
 
 CREATE TABLE IF NOT EXISTS chats (
@@ -33,16 +38,3 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 );
 
 
-SELECT id,user_email,title
-FROM chats
-ORDER BY id DESC
-LIMIT 10;
-
-SELECT
-    u.email,
-    c.user_email,
-    c.id,
-    c.title
-FROM users u
-LEFT JOIN chats c
-ON c.user_email = u.email;

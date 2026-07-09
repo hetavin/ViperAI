@@ -14,6 +14,7 @@ def _ensure_users_table(conn):
                 name VARCHAR(255) NOT NULL,
                 email VARCHAR(255) UNIQUE NOT NULL,
                 password VARCHAR(255) NOT NULL,
+                role ENUM('admin', 'user') NOT NULL DEFAULT 'user',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -27,7 +28,8 @@ def me():
     return jsonify({
         "logged_in": True,
         "name": session.get("user_name", "User"),
-        "email": session.get("user_email", "")
+        "email": session.get("user_email", ""),
+        "role": session.get("user_role", "user")
     }), 200
 
 
@@ -98,7 +100,7 @@ def login_api():
 
     try:
         with conn.cursor() as cursor:
-            cursor.execute("SELECT id, name, password FROM users WHERE email = %s", (email,))
+            cursor.execute("SELECT id, name, password, role FROM users WHERE email = %s", (email,))
             user = cursor.fetchone()
 
         if not user:
@@ -110,7 +112,9 @@ def login_api():
         session["user_id"]    = user["id"]
         session["user_name"]  = user["name"]
         session["user_email"] = email
+        session["user_role"]  = user["role"]
         first = user["name"].split()[0].capitalize()
-        return jsonify({"message": f"Welcome back, {first}!", "redirect": "/"}), 200
+        redirect_url = "/admin/dashboard" if user["role"] == "admin" else "/"
+        return jsonify({"message": f"Welcome back, {first}!", "redirect": redirect_url}), 200
     finally:
         conn.close()

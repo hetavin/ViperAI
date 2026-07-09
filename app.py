@@ -12,9 +12,11 @@ from routes.auth import auth_bp
 app = Flask(__name__)
 
 app.secret_key = os.environ.get('SECRET_KEY', 'change-me-in-production')
+
+is_production = os.environ.get('FLASK_ENV') == 'production' or os.environ.get('RENDER') or os.environ.get('RAILWAY_ENVIRONMENT')
 app.config.update(
-    SESSION_COOKIE_SECURE=True,
-    SESSION_COOKIE_SAMESITE='None',
+    SESSION_COOKIE_SECURE=bool(is_production),
+    SESSION_COOKIE_SAMESITE='None' if is_production else 'Lax',
     SESSION_COOKIE_HTTPONLY=True,
 )
 
