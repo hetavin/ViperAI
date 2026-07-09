@@ -23,7 +23,7 @@
 <body>
 
   <!-- Install App Popup -->
-  <div id="installPopup" style="display:none;position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:300;width:90%;max-width:360px;background:var(--bg-card);border:1px solid var(--bdr2);border-radius:14px;padding:16px 18px;box-shadow:0 8px 32px var(--shadow);animation:mIn .2s ease;">
+  <div id="installPopup" style="display:none;position:fixed;top:24px;left:50%;transform:translateX(-50%);z-index:300;width:90%;max-width:360px;background:var(--bg-card);border:1px solid var(--bdr2);border-radius:14px;padding:16px 18px;box-shadow:0 8px 32px var(--shadow);animation:mIn .2s ease;">
     <div style="display:flex;align-items:center;gap:12px;">
       <div style="width:42px;height:42px;background:var(--accent);border-radius:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
         <i class="fas fa-robot" style="color:#0c0d10;font-size:18px;"></i>
@@ -217,9 +217,13 @@
       </div>
       <div class="ia">
         <div class="ia-w">
+          <div id="filePreview" class="ia-files"></div>
           <div class="ia-box">
+            <button class="ia-plus" onclick="document.getElementById('fileIn').click()" title="Attach file or image"><i class="fas fa-plus"></i></button>
+            <input type="file" id="fileIn" multiple accept="image/*,.pdf,.txt,.doc,.docx,.csv" style="display:none" onchange="onFileSelect(this)">
             <textarea class="ia-ta" id="cIn" placeholder="Message ViperAI..." rows="1" onkeydown="iKey(event)"
               oninput="aH(this)"></textarea>
+            <button class="ia-mic" id="micBtn" onclick="toggleMic()" title="Voice input"><i class="fas fa-microphone"></i></button>
           </div>
           <button class="ia-s" id="sBtn" onclick="send()" disabled><i class="fas fa-arrow-up"></i></button>
         </div>

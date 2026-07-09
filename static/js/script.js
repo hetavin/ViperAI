@@ -144,7 +144,10 @@ function renderMsgs(c) {
     if (!c.messages.length) { showWelcome(); return }
     const mb = compact ? '10px' : '20px';
     el.innerHTML = c.messages.map(m => {
-        if (m.role === 'user') return `<div class="mg mg-user" style="margin-bottom:${mb}"><div class="mg-h"><div class="mg-a u">${ini(profile.name)}</div><span class="mg-n">${esc(profile.name)}</span><span class="mg-t">${ft(m.time)}</span></div><div class="mg-b"><p>${esc(m.text)}</p></div></div>`;
+        if (m.role === 'user') {
+            const fileChips = (m.files && m.files.length) ? `<div class="mg-files">${m.files.map(f => { const isImg = f.type.startsWith('image/'); return `<span class="ia-file-chip" style="pointer-events:none">${isImg ? `<i class="fas fa-image" style="font-size:14px;color:var(--accent)"></i>` : `<i class="fas fa-file" style="font-size:14px;color:var(--accent)"></i>`}<span>${esc(f.name)}</span></span>`; }).join('')}</div>` : '';
+            return `<div class="mg mg-user" style="margin-bottom:${mb}"><div class="mg-h"><div class="mg-a u">${ini(profile.name)}</div><span class="mg-n">${esc(profile.name)}</span><span class="mg-t">${ft(m.time)}</span></div><div class="mg-b">${fileChips}<p>${esc(m.text)}</p></div></div>`;
+        }
         return `<div class="mg" style="margin-bottom:${mb}"><div class="mg-h"><div class="mg-a b"><i class="fas fa-robot" style="font-size:10px"></i></div><span class="mg-n">ViperAI</span><span class="mg-t">${ft(m.time)}</span></div><div class="mg-b">${rt(m.text)}</div></div>`;
     }).join('');
     hlCode(el);
@@ -182,20 +185,37 @@ function send() {
         chats.unshift(c); activeId = c.id; document.getElementById('tbT').textContent = c.title;
     }
     const chat = chats.find(c => c.id === activeId); if (!chat) return;
-    chat.messages.push({ role: 'user', text: txt, time: new Date().toISOString() }); save();
+    const filesToSend = [...attachedFiles];
+    attachedFiles = []; renderFilePreview();
+    const filesMeta = filesToSend.map(f => ({ name: f.name, type: f.type }));
+    chat.messages.push({ role: 'user', text: txt, time: new Date().toISOString(), files: filesMeta }); save();
     inp.value = ''; inp.style.height = 'auto'; document.getElementById('sBtn').disabled = true;
     renderMsgs(chat); renderSB(); updateProfileStats();
     gen = true; const inner = document.getElementById('msIn'); const tip = document.createElement('div'); tip.className = 'ty'; tip.id = 'typI'; tip.innerHTML = '<span></span><span></span><span></span>'; inner.appendChild(tip); document.getElementById('ms').scrollTop = 1e6;
-    fetch('/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: txt, chat_id: chat.serverChatId || null, title: chat.title, user_email: profile.email, user_name: profile.name })
-    })
+
+    let fetchOpts;
+    if (filesToSend.length) {
+        const fd = new FormData();
+        fd.append('message', txt);
+        fd.append('chat_id', chat.serverChatId || '');
+        fd.append('title', chat.title);
+        fd.append('user_email', profile.email);
+        fd.append('user_name', profile.name);
+        filesToSend.forEach(f => fd.append('files', f));
+        fetchOpts = { method: 'POST', body: fd };
+    } else {
+        fetchOpts = {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: txt, chat_id: chat.serverChatId || null, title: chat.title, user_email: profile.email, user_name: profile.name })
+        };
+    }
+    fetch('/chat', fetchOpts)
         .then(r => r.json())
         .then(d => {
             const resp = d.answer || 'Sorry, no answer was returned.';
             if (d.chat_id && !chat.serverChatId) { chat.serverChatId = d.chat_id; save(); }
-            chat.messages.push({ role: 'bot', text: resp, time: new Date().toISOString() }); save(); gen = false; renderMsgs(chat); updateProfileStats();
+            chat.messages.push({ role: 'bot', text: resp, time: new Date().toISOString() }); save(); gen = false; renderMsgs(chat); updateProfileStats(); speakText(resp);
         })
         .catch(() => {
             chat.messages.push({ role: 'bot', text: 'Sorry, I could not reach the server. Please try again.', time: new Date().toISOString() }); save(); gen = false; renderMsgs(chat); updateProfileStats();
@@ -237,6 +257,56 @@ document.querySelectorAll('.mo').forEach(m => { m.addEventListener('click', e =>
 document.addEventListener('click', e => {
     if (innerWidth <= 768 && document.getElementById('sb').classList.contains('open') && !document.getElementById('sb').contains(e.target) && !e.target.closest('.tb-ham') && !e.target.closest('#setTbBtn')) document.getElementById('sb').classList.remove('open');
 });
+
+/* ===== FILE ATTACHMENTS ===== */
+let attachedFiles = [];
+function onFileSelect(input) {
+    Array.from(input.files).forEach(f => attachedFiles.push(f));
+    input.value = '';
+    renderFilePreview();
+}
+function renderFilePreview() {
+    const el = document.getElementById('filePreview');
+    if (!attachedFiles.length) { el.innerHTML = ''; return; }
+    el.innerHTML = attachedFiles.map((f, i) => {
+        const isImg = f.type.startsWith('image/');
+        const icon = isImg ? '' : `<i class="fas fa-file" style="font-size:16px;color:var(--accent)"></i>`;
+        const preview = isImg ? `<img src="${URL.createObjectURL(f)}">` : icon;
+        return `<div class="ia-file-chip">${preview}<span title="${f.name}">${f.name}</span><button onclick="removeFile(${i})"><i class="fas fa-xmark"></i></button></div>`;
+    }).join('');
+}
+function removeFile(i) { attachedFiles.splice(i, 1); renderFilePreview(); }
+
+/* ===== MICROPHONE / SPEECH ===== */
+let recognition = null, micActive = false;
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+function toggleMic() {
+    if (!SpeechRecognition) { toast('Speech recognition not supported in this browser'); return; }
+    if (micActive) { recognition.stop(); return; }
+    recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.interimResults = false;
+    recognition.onstart = () => { micActive = true; document.getElementById('micBtn').classList.add('recording'); };
+    recognition.onresult = e => {
+        const txt = e.results[0][0].transcript;
+        const inp = document.getElementById('cIn');
+        inp.value = (inp.value + ' ' + txt).trim();
+        aH(inp);
+        document.getElementById('sBtn').disabled = !inp.value.trim();
+    };
+    recognition.onend = () => { micActive = false; document.getElementById('micBtn').classList.remove('recording'); };
+    recognition.onerror = () => { micActive = false; document.getElementById('micBtn').classList.remove('recording'); };
+    recognition.start();
+}
+function speakText(text) {
+    if (!window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    const plain = text.replace(/<[^>]+>/g, '').replace(/```[\s\S]*?```/g, 'code block').trim();
+    const utt = new SpeechSynthesisUtterance(plain);
+    utt.lang = 'en-US';
+    utt.rate = 1;
+    window.speechSynthesis.speak(utt);
+}
 
 /* ===== PWA INSTALL ===== */
 const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;

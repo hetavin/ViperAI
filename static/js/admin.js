@@ -68,6 +68,17 @@ function showToast(message, type = 'success') {
   setTimeout(() => toast.remove(), 3200);
 }
 
+function parseMsg(raw) {
+  try {
+    const p = JSON.parse(raw);
+    if (p && p.files) {
+      const chips = p.files.map(n => `<span style="display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:6px;padding:2px 8px;font-size:11px;margin-bottom:4px;"><i class="fas fa-file" style="font-size:10px;color:var(--accent);"></i>${esc(n)}</span>`).join(' ');
+      return `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;">${chips}</div>${esc(p.text)}`;
+    }
+  } catch (e) {}
+  return esc(raw);
+}
+
 function switchPage(pageId) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -340,7 +351,7 @@ async function selectChatById(chatId, userEmail) {
       const isUser = m.role === 'user';
       return `
         <div style="display:flex;flex-direction:column;align-items:${isUser ? 'flex-end' : 'flex-start'};">
-          <div class="chat-bubble ${isUser ? 'bubble-user' : 'bubble-bot'}" style="animation-delay:${i * 0.05}s;">${m.message}</div>
+          <div class="chat-bubble ${isUser ? 'bubble-user' : 'bubble-bot'}" style="animation-delay:${i * 0.05}s;">${isUser ? parseMsg(m.message) : esc(m.message)}</div>
           <div style="font-size:10px;color:var(--fg-muted);margin-top:4px;padding:0 4px;">
             ${isUser ? (userEmail || 'User') : 'ViperAI'} · ${formatTime(m.created_at)}
           </div>
@@ -567,7 +578,7 @@ function renderViperChatMessages(messages) {
     return `
       <div style="display:flex;flex-direction:column;align-items:${isUser ? 'flex-end' : 'flex-start'};">
         <div class="chat-bubble ${isUser ? 'bubble-user' : 'bubble-bot'}" style="animation-delay:${i * 0.05}s;">
-          ${m.message}
+          ${isUser ? parseMsg(m.message) : esc(m.message)}
         </div>
         <div style="font-size:10px;color:var(--fg-muted);margin-top:4px;padding:0 4px;">
           ${isUser ? (selectedViperUser || 'User') : 'ViperAI'} · ${formatTime(m.created_at)}

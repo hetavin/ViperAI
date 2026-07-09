@@ -1,10 +1,53 @@
 from flask import Blueprint, request, jsonify, session
 from threading import Thread
+import base64
+import json
 from services.llm_service import ask_llm
 from connect import db_connection
 
 chat_bp = Blueprint("chat", __name__)
 
+
+def _extract_file_contents(files):
+    """Read uploaded files and return list of dicts for ask_llm."""
+    result = []
+    for f in files:
+        mime = f.content_type or ""
+        raw = f.read()
+        if mime.startswith("image/"):
+            result.append({
+                "type": "image",
+                "name": f.filename,
+                "mime": mime,
+                "data": base64.b64encode(raw).decode()
+            })
+        else:
+            # Try to decode as text (txt, csv, md, code files)
+            try:
+                text = raw.decode("utf-8", errors="replace")
+            except Exception:
+                text = raw.decode("latin-1", errors="replace")
+            result.append({
+                "type": "text",
+                "name": f.filename,
+                "data": text[:12000]  # cap at 12k chars to stay within token limits
+            })
+    return result
+
+
+
+def _parse_msg(role, message, created_at):
+    entry = {'role': role, 'time': created_at.isoformat() + '+00:00'}
+    if role == 'user' and message.startswith('{'):
+        try:
+            p = json.loads(message)
+            entry['text'] = p.get('text', message)
+            entry['files'] = p.get('files', [])
+            return entry
+        except Exception:
+            pass
+    entry['text'] = message
+    return entry
 
 
 def _save_to_db(user_email, user_name, chat_id, title, question, answer, result_box):
@@ -37,21 +80,36 @@ def _save_to_db(user_email, user_name, chat_id, title, question, answer, result_
 
 @chat_bp.route("/chat", methods=["POST"])
 def chat():
-    data     = request.get_json()
-    question = (data.get("message") or "").strip()
-    chat_id  = data.get("chat_id")
-    title    = data.get("title") or question[:60]
+    # Support both JSON (no files) and multipart/form-data (with files)
+    if request.content_type and "multipart/form-data" in request.content_type:
+        question  = (request.form.get("message") or "").strip()
+        chat_id   = request.form.get("chat_id") or None
+        title     = request.form.get("title") or question[:60]
+        body_email = (request.form.get("user_email") or "").strip().lower()
+        body_name  = (request.form.get("user_name") or "").strip()
+        files      = request.files.getlist("files")
+        file_contents = _extract_file_contents(files) if files else []
+        file_names = [f.filename for f in files] if files else []
+    else:
+        data       = request.get_json()
+        question   = (data.get("message") or "").strip()
+        chat_id    = data.get("chat_id")
+        title      = data.get("title") or question[:60]
+        body_email = (data.get("user_email") or "").strip().lower()
+        body_name  = (data.get("user_name") or "").strip()
+        file_contents = []
+        file_names = []
 
     if not question:
         return jsonify({"error": "Empty message"}), 400
 
     session_email = session.get("user_email")
-    body_email    = (data.get("user_email") or "").strip().lower()
-    body_name     = (data.get("user_name") or "").strip()
     user_email    = session_email or body_email
     user_name     = session.get("user_name") or body_name
 
-    answer = ask_llm(question)
+    answer = ask_llm(question, file_contents if file_contents else None)
+
+    stored_question = (json.dumps({'files': file_names, 'text': question}) if file_names else question)
 
     result_box = []
     _save_to_db(
@@ -59,7 +117,7 @@ def chat():
         user_name,
         chat_id,
         title,
-        question,
+        stored_question,
         answer,
         result_box
     )
@@ -100,7 +158,7 @@ def get_user_chats():
                     "title": c["title"],
                     "createdAt": c["created_at"].isoformat() + '+00:00',
                     "messages": [
-                        {"role": m["role"], "text": m["message"], "time": m["created_at"].isoformat() + '+00:00'}
+                        _parse_msg(m["role"], m["message"], m["created_at"])
                         for m in messages
                     ]
                 })
