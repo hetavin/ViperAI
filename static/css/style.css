@@ -277,7 +277,7 @@ h4 {
 .sb-it-t {
   flex: 1;
   min-width: 0;
-  font-size: 17.5px;
+  font-size: 13px;
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
@@ -980,7 +980,7 @@ h4 {
 
 .mg-b {
   padding-left: 30px;
-  font-size: 20px;
+  font-size: 15px;
   line-height: 1.7;
   color: var(--fg2)
 }
@@ -997,7 +997,7 @@ h4 {
   background: var(--code-bg);
   padding: 1px 5px;
   border-radius: 3px;
-  font-size: 17px;
+  font-size: 13px;
   color: var(--accent);
   font-family: 'Courier New', monospace;
   transition: background .3s
@@ -1476,6 +1476,28 @@ h4 {
   font-size: 12px
 }
 
+/* ===== MEDIUM (768–1024px) ===== */
+@media(min-width:769px) and (max-width:1024px) {
+  .sb {
+    width: 220px;
+    min-width: 220px;
+  }
+
+  .ms-in {
+    padding: 16px 18px 6px;
+    max-width: 100%;
+  }
+
+  .ia-w {
+    max-width: 100%;
+  }
+
+  .mg-b {
+    font-size: 15px;
+  }
+}
+
+/* ===== SMALL (≤768px) ===== */
 @media(max-width:768px) {
   .sb {
     position: fixed;
@@ -1503,10 +1525,23 @@ h4 {
   }
 
   .ms-in {
-    padding: 14px
+    padding: 14px;
+    max-width: 100%;
   }
 
   .ia {
     padding: 8px 14px 14px
   }
+
+  .ia-w {
+    max-width: 100%;
+  }
+
+  .mg-b {
+    font-size: 14px;
+  }
+
+  /* welcome cards single column on very small */
+  .wc h2 { font-size: 18px; }
+  .wc > p { font-size: 12px; }
 }

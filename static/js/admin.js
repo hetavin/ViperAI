@@ -231,16 +231,16 @@ function renderPdfList() {
   list.innerHTML = filtered.map(p => `
     <div class="pdf-item" id="pdf-${p.id}">
       <div class="pdf-icon"><i class="fas fa-file-pdf"></i></div>
-      <div style="flex:1;min-width:0;">
-        <div style="font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.name}</div>
-        <div style="font-size:12px;color:var(--fg-muted);margin-top:2px;">
-          ${formatSize(p.size)} · ${p.pages} pages · ${formatDate(p.uploadedAt)}
-        </div>
+      <div class="pdf-info">
+        <div class="pdf-name">${p.name}</div>
+        <div class="pdf-meta">${formatSize(p.size)} · ${p.pages} pages · ${formatDate(p.uploadedAt)}</div>
       </div>
-      <span class="badge badge-success"><i class="fas fa-circle-check"></i> Processed</span>
-      <button class="btn-danger" onclick="openDeleteModal('pdf', '${p.id}', '${p.name.replace(/'/g, "\\'")}')">
-        <i class="fas fa-trash-can"></i> Remove
-      </button>
+      <div class="pdf-actions">
+        <span class="badge badge-success"><i class="fas fa-circle-check"></i> Processed</span>
+        <button class="btn-danger" onclick="openDeleteModal('pdf', '${p.id}', '${p.name.replace(/'/g, "\\'")}')">
+          <i class="fas fa-trash-can"></i> Remove
+        </button>
+      </div>
     </div>
   `).join('');
 }

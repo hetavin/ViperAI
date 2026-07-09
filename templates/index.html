@@ -22,6 +22,24 @@
 
 <body>
 
+  <!-- Install App Popup -->
+  <div id="installPopup" style="display:none;position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:300;width:90%;max-width:360px;background:var(--bg-card);border:1px solid var(--bdr2);border-radius:14px;padding:16px 18px;box-shadow:0 8px 32px var(--shadow);animation:mIn .2s ease;">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div style="width:42px;height:42px;background:var(--accent);border-radius:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <i class="fas fa-robot" style="color:#0c0d10;font-size:18px;"></i>
+      </div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:14px;font-weight:700;font-family:'Space Grotesk';">Install ViperAI</div>
+        <div style="font-size:11.5px;color:var(--fg3);margin-top:1px;">Add to home screen for quick access</div>
+      </div>
+      <button onclick="dismissInstall()" style="background:none;border:none;color:var(--fg4);cursor:pointer;font-size:16px;padding:2px;flex-shrink:0;"><i class="fas fa-xmark"></i></button>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:14px;">
+      <button onclick="dismissInstall()" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--bdr2);background:none;color:var(--fg3);font-size:12.5px;font-family:inherit;cursor:pointer;">Not now</button>
+      <button onclick="installApp()" style="flex:1;padding:8px;border-radius:8px;border:none;background:var(--accent);color:#0c0d10;font-size:12.5px;font-weight:700;font-family:'Space Grotesk';cursor:pointer;"><i class="fas fa-download" style="margin-right:5px;"></i>Install</button>
+    </div>
+  </div>
+
   <div class="tc" id="toasts"></div>
 
   <!-- Auth Popup -->

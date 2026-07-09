@@ -238,6 +238,33 @@ document.addEventListener('click', e => {
     if (innerWidth <= 768 && document.getElementById('sb').classList.contains('open') && !document.getElementById('sb').contains(e.target) && !e.target.closest('.tb-ham') && !e.target.closest('#setTbBtn')) document.getElementById('sb').classList.remove('open');
 });
 
+/* ===== PWA INSTALL ===== */
+let _installPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    _installPrompt = e;
+    setTimeout(() => {
+        document.getElementById('installPopup').style.display = 'block';
+        setInterval(() => {
+            if (_installPrompt) document.getElementById('installPopup').style.display = 'block';
+        }, 60000);
+    }, 3000);
+});
+function installApp() {
+    if (!_installPrompt) return;
+    _installPrompt.prompt();
+    _installPrompt.userChoice.then(() => {
+        _installPrompt = null;
+        document.getElementById('installPopup').style.display = 'none';
+    });
+}
+function dismissInstall() {
+    document.getElementById('installPopup').style.display = 'none';
+}
+window.addEventListener('appinstalled', () => {
+    document.getElementById('installPopup').style.display = 'none';
+});
+
 /* ===== INIT ===== */
 load();
 if (!profile.email || profile.email === 'user@botbase.io') { chats = []; save(); }
