@@ -409,8 +409,8 @@ fetch('/api/auth/me')
             document.getElementById('sbAuth').style.display = 'block';
             document.getElementById('sbProfile').style.display = 'none';
             showWelcome(); renderSB(); updateProfileStats();
+            document.getElementById('authPopup').classList.add('on');
             if (!isStandalone()) {
-                document.getElementById('authPopup').classList.add('on');
                 let popCount = 1;
                 const popTimer = setInterval(() => {
                     popCount++;
@@ -421,6 +421,9 @@ fetch('/api/auth/me')
                         document.getElementById('maybeLaterBtn').style.display = 'none';
                     }
                 }, 60000);
+            } else {
+                document.getElementById('authPopup').classList.add('locked');
+                document.getElementById('maybeLaterBtn').style.display = 'none';
             }
         }
     })
