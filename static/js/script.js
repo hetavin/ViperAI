@@ -6,13 +6,13 @@ let settingsOpen = false;
 /* ===== UTILS ===== */
 const gid = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 8);
 const ft = iso => new Date(iso).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-function fd(iso) { const n = Date.now() - new Date(iso).getTime(); if (n < 6e4) return 'Just now'; if (n < 36e5) return Math.floor(n / 6e4) + 'm ago'; if (n < 864e5) return Math.floor(n / 36e5) + 'h ago'; if (n < 6048e5) return Math.floor(n / 864e5) + 'd ago'; return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) }
+function fd(iso) { const n = Date.now() - new Date(iso).getTime(); if (n < 6e4) return 'Just now'; if (n < 36e5) return Math.floor(n / 6e4) + 'm ago'; if (n < 864e5) return Math.floor(n / 36e5) + 'h ago'; if (n < 6048e5) return Math.floor(n / 864e5) + 'd ago'; return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
 const ini = n => n.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
-const esc = t => { const d = document.createElement('div'); d.textContent = t; return d.innerHTML };
+const esc = t => { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; };
 function rt(t) {
     let h = esc(t);
     h = h.replace(/```(\w*)\n([\s\S]*?)```/g, (m, lang, code) => {
-        const l = lang ? lang : 'code';
+        const l = esc(lang || 'code');
         return `<div class="cb"><div class="cb-h"><span class="cb-l">${l}</span><button class="cb-c" onclick="copyCode(this)" title="Copy"><i class="fas fa-copy"></i></button></div><pre><code class="language-${l}">${code.replace(/\n$/, '')}</code></pre></div>`;
     });
     h = h.replace(/`([^`]+)`/g, '<code>$1</code>');
@@ -21,23 +21,23 @@ function rt(t) {
     h = h.replace(/^- (.+)$/gm, '<li>$1</li>');
     h = h.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
     h = h.replace(/^\d+\.\s(.+)$/gm, '<li>$1</li>');
-    h = h.split('\n\n').map(b => { if (/^<(pre|ul|ol|li|div class="cb")/.test(b)) return b; return '<p>' + b.replace(/\n/g, '<br>') + '</p>' }).join('');
+    h = h.split('\n\n').map(b => { if (/^<(pre|ul|ol|li|div class="cb")/.test(b)) return b; return '<p>' + b.replace(/\n/g, '<br>') + '</p>'; }).join('');
     return h;
 }
 function copyCode(btn) {
     const box = btn.closest('.cb'); if (!box) return;
     const text = box.querySelector('pre').textContent;
-    const done = () => { const i = btn.querySelector('i'); i.className = 'fas fa-check'; setTimeout(() => i.className = 'fas fa-copy', 1500) };
+    const done = () => { const i = btn.querySelector('i'); i.className = 'fas fa-check'; setTimeout(() => i.className = 'fas fa-copy', 1500); };
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
     else fallbackCopy(text, done);
 }
 function fallbackCopy(text, done) {
     const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select();
-    try { document.execCommand('copy') } catch (e) { } ta.remove(); done();
+    try { document.execCommand('copy'); } catch (e) { } ta.remove(); done();
 }
-function toast(m) { const c = document.getElementById('toasts'), e = document.createElement('div'); e.className = 'tt tt-s'; e.innerHTML = `<i class="fas fa-circle-check"></i> ${m}`; c.appendChild(e); setTimeout(() => e.remove(), 3200) }
-function save() { localStorage.setItem('bb_chats', JSON.stringify(chats)); localStorage.setItem('bb_profile', JSON.stringify(profile)) }
-function load() { const d = localStorage.getItem('bb_chats'); chats = d ? JSON.parse(d) : []; const p = localStorage.getItem('bb_profile'); if (p) profile = JSON.parse(p) }
+function toast(msg) { const c = document.getElementById('toasts'), e = document.createElement('div'); e.className = 'tt tt-s'; e.textContent = msg; c.appendChild(e); setTimeout(() => e.remove(), 3200); }
+function save() { localStorage.setItem('bb_chats', JSON.stringify(chats)); localStorage.setItem('bb_profile', JSON.stringify(profile)); }
+function load() { const d = localStorage.getItem('bb_chats'); chats = d ? JSON.parse(d) : []; const p = localStorage.getItem('bb_profile'); if (p) profile = JSON.parse(p); }
 
 /* ===== THEME ===== */
 function setTheme(t) {
@@ -69,29 +69,29 @@ function updateProfile() {
 function updateProfileStats() {
     document.getElementById('pfStatChats').textContent = chats.length;
     document.getElementById('pfStatMsgs').textContent = chats.reduce((s, c) => s + c.messages.length, 0);
-    if (chats.length > 0) { const d = Math.max(1, Math.ceil((Date.now() - new Date(chats[chats.length - 1].createdAt).getTime()) / 864e5)); document.getElementById('pfStatDays').textContent = d } else { document.getElementById('pfStatDays').textContent = '0' }
+    if (chats.length > 0) {
+        const d = Math.max(1, Math.ceil((Date.now() - new Date(chats[chats.length - 1].createdAt).getTime()) / 864e5));
+        document.getElementById('pfStatDays').textContent = d;
+    } else {
+        document.getElementById('pfStatDays').textContent = '0';
+    }
 }
 
 /* ===== SETTINGS ===== */
 function togSettings() {
     const panel = document.getElementById('setPanel');
-    const isOpen = panel.classList.contains('open');
-    if (isOpen) { closeSettings(); } else { openSettings(); }
+    panel.classList.contains('open') ? closeSettings() : openSettings();
 }
-
 function openSettings() {
     const panel = document.getElementById('setPanel');
     const btn = document.getElementById('setTbBtn');
     panel.classList.add('open');
     btn.classList.add('set-active');
     settingsOpen = true;
-    // Close profile
     document.getElementById('pfDrop').classList.remove('open');
     document.getElementById('pfBtn').classList.remove('expanded');
-    // On mobile, also open sidebar
     if (innerWidth <= 768) document.getElementById('sb').classList.add('open');
 }
-
 function closeSettings() {
     const panel = document.getElementById('setPanel');
     const btn = document.getElementById('setTbBtn');
@@ -99,26 +99,30 @@ function closeSettings() {
     btn.classList.remove('set-active');
     settingsOpen = false;
 }
-
 function togCompact(on) {
     compact = on;
-    document.querySelectorAll('.mg').forEach(m => { m.style.marginBottom = on ? '10px' : '20px' });
+    document.querySelectorAll('.mg').forEach(m => { m.style.marginBottom = on ? '10px' : '20px'; });
     localStorage.setItem('bb_compact', on ? '1' : '0');
     toast(on ? 'Compact mode on' : 'Compact mode off');
 }
 
 /* ===== SIDEBAR ===== */
-function togSB() { document.getElementById('sb').classList.toggle('open') }
+function togSB() { document.getElementById('sb').classList.toggle('open'); }
 function renderSB() {
     const el = document.getElementById('sbList'), q = document.getElementById('sbSrch').value.toLowerCase();
     const fl = chats.filter(c => c.title.toLowerCase().includes(q));
-    if (!fl.length) { el.innerHTML = `<div class="sb-empty"><i class="fas fa-comments"></i><span>${q ? 'No matches' : 'No conversations yet'}</span></div>`; return }
+    if (!fl.length) { el.innerHTML = `<div class="sb-empty"><i class="fas fa-comments"></i><span>${q ? 'No matches' : 'No conversations yet'}</span></div>`; return; }
     const now = Date.now(), td = [], wk = [], ol = [];
-    fl.forEach(c => { const a = now - new Date(c.createdAt).getTime(); if (a < 864e5) td.push(c); else if (a < 6048e5) wk.push(c); else ol.push(c) });
-    let h = '';
-    const g = (l, items) => { if (!items.length) return ''; let s = `<div class="sb-lbl">${l}</div>`; items.forEach(c => { s += `<div class="sb-it ${c.id === activeId ? 'on' : ''}" onclick="selChat('${c.id}');if(innerWidth<=768)togSB()"><div class="sb-it-i"><i class="fas fa-message"></i></div><div style="flex:1;min-width:0"><div class="sb-it-t">${esc(c.title)}</div><div class="sb-it-m">${c.messages.length} msgs · ${fd(c.createdAt)}</div></div><button class="sb-it-d" onclick="event.stopPropagation();openDlId('${c.id}')" title="Delete"><i class="fas fa-xmark"></i></button></div>` }); return s };
-    h += g('Today', td) + g('This Week', wk) + g('Older', ol);
-    el.innerHTML = h;
+    fl.forEach(c => { const a = now - new Date(c.createdAt).getTime(); if (a < 864e5) td.push(c); else if (a < 6048e5) wk.push(c); else ol.push(c); });
+    const g = (l, items) => {
+        if (!items.length) return '';
+        let s = `<div class="sb-lbl">${l}</div>`;
+        items.forEach(c => {
+            s += `<div class="sb-it ${c.id === activeId ? 'on' : ''}" onclick="selChat('${c.id}')"><div class="sb-it-i"><i class="fas fa-message"></i></div><div style="flex:1;min-width:0"><div class="sb-it-t">${esc(c.title)}</div><div class="sb-it-m">${c.messages.length} msgs · ${fd(c.createdAt)}</div></div><button class="sb-it-d" onclick="event.stopPropagation();openDlId('${c.id}')" title="Delete"><i class="fas fa-xmark"></i></button></div>`;
+        });
+        return s;
+    };
+    el.innerHTML = g('Today', td) + g('This Week', wk) + g('Older', ol);
 }
 
 /* ===== CHAT ===== */
@@ -126,30 +130,51 @@ function selChat(id) {
     if (!profile.email || profile.email === 'user@botbase.io') {
         chats = chats.filter(c => c.id === id); save();
     }
-    activeId = id; const c = chats.find(x => x.id === id); if (!c) return;
+    activeId = id;
+    const c = chats.find(x => x.id === id); if (!c) return;
     document.getElementById('tbT').textContent = c.title;
     renderMsgs(c); renderSB();
+    if (innerWidth <= 768) document.getElementById('sb').classList.remove('open');
 }
 function showWelcome() {
     activeId = null;
     document.getElementById('tbT').textContent = 'New Chat';
-    // document.getElementById('rnBtn').style.display = 'none';
-    // document.getElementById('dlBtn').style.display = 'none';
     document.getElementById('msIn').innerHTML = `<div class="wc"><div class="wc-ic"><i class="fas fa-robot"></i></div><h2>How can I help you?</h2><p>Ask me anything about your uploaded documents — company policies, API docs, onboarding, troubleshooting, and more.</p><div class="wc-g"><div class="wc-c" onclick="useS('What is the remote work policy?')"><div class="wc-c-t">Remote Work Policy</div><div class="wc-c-d">Rules for working from home</div></div><div class="wc-c" onclick="useS('How do I authenticate with the API?')"><div class="wc-c-t">API Authentication</div><div class="wc-c-d">Getting started with the API</div></div><div class="wc-c" onclick="useS('What happens on my first day?')"><div class="wc-c-t">First Day Guide</div><div class="wc-c-d">New employee onboarding steps</div></div><div class="wc-c" onclick="useS('How do I fix a 500 error on checkout?')"><div class="wc-c-t">Troubleshoot Errors</div><div class="wc-c-d">Debug common checkout issues</div></div></div></div>`;
     renderSB();
 }
-function useS(t) { const i = document.getElementById('cIn'); i.value = t; aH(i); document.getElementById('sBtn').disabled = false; send() }
+function useS(t) { const i = document.getElementById('cIn'); i.value = t; aH(i); document.getElementById('sBtn').disabled = false; send(); }
 function renderMsgs(c) {
     const el = document.getElementById('msIn');
-    if (!c.messages.length) { showWelcome(); return }
+    if (!c.messages.length) { showWelcome(); return; }
     const mb = compact ? '10px' : '20px';
-    el.innerHTML = c.messages.map(m => {
-        if (m.role === 'user') {
-            const fileChips = (m.files && m.files.length) ? `<div class="mg-files">${m.files.map(f => { const isImg = f.type.startsWith('image/'); return `<span class="ia-file-chip" style="pointer-events:none">${isImg ? `<i class="fas fa-image" style="font-size:14px;color:var(--accent)"></i>` : `<i class="fas fa-file" style="font-size:14px;color:var(--accent)"></i>`}<span>${esc(f.name)}</span></span>`; }).join('')}</div>` : '';
-            return `<div class="mg mg-user" style="margin-bottom:${mb}"><div class="mg-h"><div class="mg-a u">${ini(profile.name)}</div><span class="mg-n">${esc(profile.name)}</span><span class="mg-t">${ft(m.time)}</span></div><div class="mg-b">${fileChips}<p>${esc(m.text)}</p></div></div>`;
+    el.innerHTML = '';
+    c.messages.forEach(msg => {
+        const wrap = document.createElement('div');
+        wrap.className = 'mg' + (msg.role === 'user' ? ' mg-user' : '');
+        wrap.style.marginBottom = mb;
+        if (msg.role === 'user') {
+            const avatar = `<div class="mg-a u">${ini(profile.name)}</div>`;
+            const header = `<div class="mg-h">${avatar}<span class="mg-n">${esc(profile.name)}</span><span class="mg-t">${ft(msg.time)}</span></div>`;
+            let fileChipsHtml = '';
+            if (msg.files && msg.files.length) {
+                fileChipsHtml = '<div class="mg-files">' + msg.files.map(f => {
+                    const name = typeof f === 'string' ? f : (f.name || '');
+                    const isImg = typeof f === 'object' && f.type ? f.type.startsWith('image/') : /\.(png|jpe?g|gif|webp|svg)$/i.test(name);
+                    const icon = isImg ? '<i class="fas fa-image" style="font-size:14px;color:var(--accent)"></i>' : '<i class="fas fa-file" style="font-size:14px;color:var(--accent)"></i>';
+                    return `<span class="ia-file-chip" style="pointer-events:none">${icon}<span>${esc(name)}</span></span>`;
+                }).join('') + '</div>';
+            }
+            wrap.innerHTML = header + `<div class="mg-b">${fileChipsHtml}<p>${esc(msg.text || '')}</p></div>`;
+        } else {
+            const header = `<div class="mg-h"><div class="mg-a b"><i class="fas fa-robot" style="font-size:10px"></i></div><span class="mg-n">ViperAI</span><span class="mg-t">${ft(msg.time)}</span></div>`;
+            wrap.innerHTML = header;
+            const body = document.createElement('div');
+            body.className = 'mg-b';
+            body.innerHTML = rt(msg.text || '');
+            wrap.appendChild(body);
         }
-        return `<div class="mg" style="margin-bottom:${mb}"><div class="mg-h"><div class="mg-a b"><i class="fas fa-robot" style="font-size:10px"></i></div><span class="mg-n">ViperAI</span><span class="mg-t">${ft(m.time)}</span></div><div class="mg-b">${rt(m.text)}</div></div>`;
-    }).join('');
+        el.appendChild(wrap);
+    });
     hlCode(el);
     document.getElementById('ms').scrollTop = 1e6;
 }
@@ -157,8 +182,8 @@ function hlCode(root) {
     if (typeof hljs === 'undefined') return;
     root.querySelectorAll('.cb pre code').forEach(b => {
         if (b.dataset.hl) return;
-        const m = b.className.match(/language-(\w+)/);
-        const lang = m ? m[1] : null;
+        const match = b.className.match(/language-(\w+)/);
+        const lang = match ? match[1] : null;
         const text = b.textContent;
         try {
             const res = (lang && hljs.getLanguage(lang))
@@ -174,8 +199,8 @@ function hlCode(root) {
 }
 
 /* ===== SEND ===== */
-function iKey(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } document.getElementById('sBtn').disabled = !e.target.value.trim() }
-function aH(el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 140) + 'px'; document.getElementById('sBtn').disabled = !el.value.trim() }
+function iKey(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } document.getElementById('sBtn').disabled = !e.target.value.trim(); }
+function aH(el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 140) + 'px'; document.getElementById('sBtn').disabled = !el.value.trim(); }
 function send() {
     const inp = document.getElementById('cIn'), txt = inp.value.trim();
     if (!txt || gen) return;
@@ -191,7 +216,10 @@ function send() {
     chat.messages.push({ role: 'user', text: txt, time: new Date().toISOString(), files: filesMeta }); save();
     inp.value = ''; inp.style.height = 'auto'; document.getElementById('sBtn').disabled = true;
     renderMsgs(chat); renderSB(); updateProfileStats();
-    gen = true; const inner = document.getElementById('msIn'); const tip = document.createElement('div'); tip.className = 'ty'; tip.id = 'typI'; tip.innerHTML = '<span></span><span></span><span></span>'; inner.appendChild(tip); document.getElementById('ms').scrollTop = 1e6;
+    gen = true;
+    const inner = document.getElementById('msIn');
+    const tip = document.createElement('div'); tip.className = 'ty'; tip.id = 'typI'; tip.innerHTML = '<span></span><span></span><span></span>';
+    inner.appendChild(tip); document.getElementById('ms').scrollTop = 1e6;
 
     let fetchOpts;
     if (filesToSend.length) {
@@ -215,30 +243,29 @@ function send() {
         .then(d => {
             const resp = d.answer || 'Sorry, no answer was returned.';
             if (d.chat_id && !chat.serverChatId) { chat.serverChatId = d.chat_id; save(); }
-            chat.messages.push({ role: 'bot', text: resp, time: new Date().toISOString() }); save(); gen = false; renderMsgs(chat); updateProfileStats(); speakText(resp);
+            chat.messages.push({ role: 'bot', text: resp, time: new Date().toISOString() });
+            save(); gen = false; renderMsgs(chat); updateProfileStats(); speakText(resp);
         })
         .catch(() => {
-            chat.messages.push({ role: 'bot', text: 'Sorry, I could not reach the server. Please try again.', time: new Date().toISOString() }); save(); gen = false; renderMsgs(chat); updateProfileStats();
+            chat.messages.push({ role: 'bot', text: 'Sorry, I could not reach the server. Please try again.', time: new Date().toISOString() });
+            save(); gen = false; renderMsgs(chat); updateProfileStats();
         });
 }
 
 /* ===== NEW / RENAME / DELETE ===== */
 function newChat() {
-    if (!profile.email || profile.email === 'user@botbase.io') {
-        chats = []; save();
-    }
-    showWelcome(); document.getElementById('cIn').focus()
+    if (!profile.email || profile.email === 'user@botbase.io') { chats = []; save(); }
+    showWelcome(); document.getElementById('cIn').focus();
+    if (innerWidth <= 768) document.getElementById('sb').classList.remove('open');
 }
-// function openRn() { if (!activeId) return; rnId = activeId; const c = chats.find(x => x.id === activeId); document.getElementById('rnIn').value = c ? c.title : ''; document.getElementById('rnMo').classList.add('on'); setTimeout(() => document.getElementById('rnIn').focus(), 60) }
-function saveRn() { if (!rnId) return; const c = chats.find(x => x.id === rnId), v = document.getElementById('rnIn').value.trim(); if (c && v) { c.title = v; save(); document.getElementById('tbT').textContent = v; renderSB(); toast('Chat renamed') } closeMo('rnMo') }
-document.getElementById('rnIn').addEventListener('keydown', e => { if (e.key === 'Enter') saveRn(); if (e.key === 'Escape') closeMo('rnMo') });
-// function openDl() { if (!activeId) return; delId = activeId; document.getElementById('dlTitle').textContent = 'Delete Chat'; document.getElementById('dlText').textContent = 'This conversation will be permanently deleted.'; document.getElementById('dlConfirm').textContent = 'Delete'; document.getElementById('dlConfirm').onclick = doDel; document.getElementById('dlMo').classList.add('on') }
-function openDlId(id) { delId = id; document.getElementById('dlTitle').textContent = 'Delete Chat'; document.getElementById('dlText').textContent = 'This conversation will be permanently deleted.'; document.getElementById('dlConfirm').textContent = 'Delete'; document.getElementById('dlConfirm').onclick = doDel; document.getElementById('dlMo').classList.add('on') }
-function doDel() { if (!delId) return; chats = chats.filter(c => c.id !== delId); save(); if (activeId === delId) { if (chats.length) selChat(chats[0].id); else showWelcome() } renderSB(); updateProfileStats(); closeMo('dlMo'); toast('Chat deleted') }
+function saveRn() { if (!rnId) return; const c = chats.find(x => x.id === rnId), v = document.getElementById('rnIn').value.trim(); if (c && v) { c.title = v; save(); document.getElementById('tbT').textContent = v; renderSB(); toast('Chat renamed'); } closeMo('rnMo'); }
+document.getElementById('rnIn').addEventListener('keydown', e => { if (e.key === 'Enter') saveRn(); if (e.key === 'Escape') closeMo('rnMo'); });
+function openDlId(id) { delId = id; document.getElementById('dlTitle').textContent = 'Delete Chat'; document.getElementById('dlText').textContent = 'This conversation will be permanently deleted.'; document.getElementById('dlConfirm').textContent = 'Delete'; document.getElementById('dlConfirm').onclick = doDel; document.getElementById('dlMo').classList.add('on'); }
+function doDel() { if (!delId) return; chats = chats.filter(c => c.id !== delId); save(); if (activeId === delId) { if (chats.length) selChat(chats[0].id); else showWelcome(); } renderSB(); updateProfileStats(); closeMo('dlMo'); toast('Chat deleted'); }
 
 /* ===== CLEAR ALL ===== */
 function clearAll() {
-    if (!chats.length) { toast('No chats to clear'); return }
+    if (!chats.length) { toast('No chats to clear'); return; }
     document.getElementById('dlTitle').textContent = 'Clear All Chats';
     document.getElementById('dlText').textContent = 'All conversations will be permanently deleted. This cannot be undone.';
     document.getElementById('dlConfirm').textContent = 'Clear All';
@@ -250,12 +277,14 @@ function clearAll() {
 }
 
 /* ===== MODAL ===== */
-function closeMo(id) { document.getElementById(id).classList.remove('on'); delId = null; rnId = null }
-document.querySelectorAll('.mo').forEach(m => { m.addEventListener('click', e => { if (e.target === m && m.id !== 'authPopup') { m.classList.remove('on'); delId = null; rnId = null } }) });
+function closeMo(id) { document.getElementById(id).classList.remove('on'); delId = null; rnId = null; }
+document.querySelectorAll('.mo').forEach(m => { m.addEventListener('click', e => { if (e.target === m && m.id !== 'authPopup') { m.classList.remove('on'); delId = null; rnId = null; } }); });
 
 /* Close sidebar on outside click (mobile) */
 document.addEventListener('click', e => {
-    if (innerWidth <= 768 && document.getElementById('sb').classList.contains('open') && !document.getElementById('sb').contains(e.target) && !e.target.closest('.tb-ham') && !e.target.closest('#setTbBtn')) document.getElementById('sb').classList.remove('open');
+    if (innerWidth <= 768 && document.getElementById('sb').classList.contains('open') && !document.getElementById('sb').contains(e.target) && !e.target.closest('.tb-ham') && !e.target.closest('#setTbBtn')) {
+        document.getElementById('sb').classList.remove('open');
+    }
 });
 
 /* ===== FILE ATTACHMENTS ===== */
@@ -270,9 +299,8 @@ function renderFilePreview() {
     if (!attachedFiles.length) { el.innerHTML = ''; return; }
     el.innerHTML = attachedFiles.map((f, i) => {
         const isImg = f.type.startsWith('image/');
-        const icon = isImg ? '' : `<i class="fas fa-file" style="font-size:16px;color:var(--accent)"></i>`;
-        const preview = isImg ? `<img src="${URL.createObjectURL(f)}">` : icon;
-        return `<div class="ia-file-chip">${preview}<span title="${f.name}">${f.name}</span><button onclick="removeFile(${i})"><i class="fas fa-xmark"></i></button></div>`;
+        const preview = isImg ? `<img src="${URL.createObjectURL(f)}">` : `<i class="fas fa-file" style="font-size:16px;color:var(--accent)"></i>`;
+        return `<div class="ia-file-chip">${preview}<span title="${esc(f.name)}">${esc(f.name)}</span><button onclick="removeFile(${i})"><i class="fas fa-xmark"></i></button></div>`;
     }).join('');
 }
 function removeFile(i) { attachedFiles.splice(i, 1); renderFilePreview(); }
@@ -330,71 +358,87 @@ function installApp() {
         document.getElementById('installPopup').style.display = 'none';
     });
 }
-function dismissInstall() {
-    document.getElementById('installPopup').style.display = 'none';
-}
-window.addEventListener('appinstalled', () => {
-    document.getElementById('installPopup').style.display = 'none';
-});
+function dismissInstall() { document.getElementById('installPopup').style.display = 'none'; }
+window.addEventListener('appinstalled', () => { document.getElementById('installPopup').style.display = 'none'; });
 
 /* ===== INIT ===== */
-load();
-if (!profile.email || profile.email === 'user@botbase.io') { chats = []; save(); }
 setTheme(localStorage.getItem('bb_theme') || 'dark');
-if (localStorage.getItem('bb_compact') === '1') { compact = true; document.getElementById('compactToggle').checked = true }
-if (chats.length > 0) selChat(chats[0].id); else showWelcome();
-updateProfileStats();
+if (localStorage.getItem('bb_compact') === '1') { compact = true; document.getElementById('compactToggle').checked = true; }
+showWelcome();
 document.getElementById('cIn').focus();
 
-fetch('/api/auth/me').then(r => r.json()).then(u => {
-    if (u.logged_in) {
-        profile.name  = u.name;
-        profile.email = u.email;
-        document.getElementById('pfName').textContent  = u.name;
-        document.getElementById('pfEmail').textContent = u.email;
-        document.getElementById('pfAv').textContent    = ini(u.name);
-        document.getElementById('sbAuth').style.display    = 'none';
-        document.getElementById('sbProfile').style.display = 'block';
-        document.getElementById('setLogoutBtn').style.display    = 'flex';
-        document.getElementById('setLogoutDivider').style.display = 'block';
-        // Load chats from DB and replace localStorage
-        fetch('/api/chats?email=' + encodeURIComponent(u.email)).then(r => r.json()).then(data => {
-            if (data.chats && data.chats.length) {
-                chats = data.chats.map(c => ({
-                    id: 'db_' + c.id,
-                    serverChatId: c.id,
-                    title: c.title,
-                    createdAt: c.createdAt,
-                    messages: c.messages
-                }));
-                save();
-                selChat(chats[0].id);
-                updateProfileStats();
-                renderSB();
+fetch('/api/auth/me')
+    .then(r => r.json())
+    .then(u => {
+        if (u.logged_in) {
+            load();
+            profile.name = u.name;
+            profile.email = u.email;
+            document.getElementById('pfName').textContent = u.name;
+            document.getElementById('pfEmail').textContent = u.email;
+            document.getElementById('pfAv').textContent = ini(u.name);
+            document.getElementById('sbAuth').style.display = 'none';
+            document.getElementById('sbProfile').style.display = 'block';
+            document.getElementById('setLogoutBtn').style.display = 'flex';
+            document.getElementById('setLogoutDivider').style.display = 'block';
+            if (chats.length) { selChat(chats[0].id); updateProfileStats(); renderSB(); }
+            const safeEmail = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/.test(u.email) ? u.email : '';
+            if (!safeEmail) return;
+            fetch('/api/chats?email=' + encodeURIComponent(safeEmail))
+                .then(r => r.json())
+                .then(data => {
+                    if (data.chats && data.chats.length) {
+                        chats = data.chats.map(c => ({
+                            id: 'db_' + c.id,
+                            serverChatId: c.id,
+                            title: c.title,
+                            createdAt: c.createdAt,
+                            messages: c.messages
+                        }));
+                        save();
+                        selChat(chats[0].id);
+                        updateProfileStats();
+                        renderSB();
+                    }
+                });
+        } else {
+            chats = []; activeId = null;
+            profile = { name: 'User', email: 'user@botbase.io' };
+            localStorage.removeItem('bb_chats');
+            localStorage.removeItem('bb_profile');
+            document.getElementById('sbAuth').style.display = 'block';
+            document.getElementById('sbProfile').style.display = 'none';
+            showWelcome(); renderSB(); updateProfileStats();
+            if (!isStandalone()) {
+                document.getElementById('authPopup').classList.add('on');
+                let popCount = 1;
+                const popTimer = setInterval(() => {
+                    popCount++;
+                    document.getElementById('authPopup').classList.add('on');
+                    if (popCount >= 2) {
+                        clearInterval(popTimer);
+                        document.getElementById('authPopup').classList.add('locked');
+                        document.getElementById('maybeLaterBtn').style.display = 'none';
+                    }
+                }, 60000);
             }
-        });
-    } else {
-        document.getElementById('sbAuth').style.display    = 'block';
-        document.getElementById('sbProfile').style.display = 'none';
-        if (!isStandalone()) document.getElementById('authPopup').classList.add('on');
-        let popCount = 1;
-        const popTimer = setInterval(() => {
-            popCount++;
-            if (!isStandalone()) document.getElementById('authPopup').classList.add('on');
-            if (popCount >= 2) {
-                clearInterval(popTimer);
-                document.getElementById('authPopup').classList.add('locked');
-                document.getElementById('maybeLaterBtn').style.display = 'none';
-            }
-        }, 1 * 60 * 1000);
-    }
-});
+        }
+    })
+    .catch(() => {
+        const sbAuth = document.getElementById('sbAuth');
+        const sbProfile = document.getElementById('sbProfile');
+        if (sbAuth) sbAuth.style.display = 'block';
+        if (sbProfile) sbProfile.style.display = 'none';
+    });
 
 function doLogout() {
     fetch('/api/auth/logout', { method: 'POST' })
         .then(r => r.json())
         .then(d => {
-            chats = []; activeId = null; save();
+            chats = []; activeId = null;
+            profile = { name: 'User', email: 'user@botbase.io' };
+            localStorage.removeItem('bb_chats');
+            localStorage.removeItem('bb_profile');
             window.location.href = d.redirect;
         });
 }

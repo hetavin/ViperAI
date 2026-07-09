@@ -27,6 +27,16 @@ def manifest():
         data = f.read()
     return Response(data, mimetype='application/manifest+json')
 
+@app.route('/static/service-worker.js')
+def service_worker():
+    path = os.path.join(app.static_folder, 'service-worker.js')
+    with open(path) as f:
+        data = f.read()
+    resp = Response(data, mimetype='application/javascript')
+    resp.headers['Service-Worker-Allowed'] = '/'
+    resp.headers['Cache-Control'] = 'no-cache'
+    return resp
+
 app.register_blueprint(route_bp)
 app.register_blueprint(admin_dp)
 app.register_blueprint(chat_bp)
