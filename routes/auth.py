@@ -39,6 +39,8 @@ def logout():
 
 @auth_bp.route("/login")
 def login_page():
+    if "user_id" in session:
+        return redirect("/admin/dashboard" if session.get("user_role") == "admin" else "/")
     return render_template("auth.html")
 
 

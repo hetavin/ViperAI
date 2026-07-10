@@ -94,7 +94,10 @@ $(document).ready(function () {
             success: function (res) {
                 $btn.prop('disabled', false).removeClass('ld');
                 toast(res.message, 's');
-                setTimeout(() => window.location.href = res.redirect, 1000);
+                setTimeout(() => {
+                    history.replaceState(null, '', res.redirect);
+                    window.location.replace(res.redirect);
+                }, 1000);
             },
 
             error: function (xhr) {
