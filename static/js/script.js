@@ -244,11 +244,12 @@ function send() {
             const resp = d.answer || 'Sorry, no answer was returned.';
             if (d.chat_id && !chat.serverChatId) { chat.serverChatId = d.chat_id; save(); }
             chat.messages.push({ role: 'bot', text: resp, time: new Date().toISOString() });
-            save(); gen = false; renderMsgs(chat); updateProfileStats(); speakText(resp);
+            save(); gen = false; renderMsgs(chat); updateProfileStats();
+            if (micTriggered) { speakText(resp); micTriggered = false; }
         })
         .catch(() => {
             chat.messages.push({ role: 'bot', text: 'Sorry, I could not reach the server. Please try again.', time: new Date().toISOString() });
-            save(); gen = false; renderMsgs(chat); updateProfileStats();
+            save(); gen = false; renderMsgs(chat); updateProfileStats(); micTriggered = false;
         });
 }
 
@@ -334,11 +335,10 @@ function renderFilePreview() {
 function removeFile(i) { attachedFiles.splice(i, 1); renderFilePreview(); }
 
 /* ===== MICROPHONE / SPEECH ===== */
-let recognition = null, micActive = false;
+let recognition = null, micActive = false, micTriggered = false;
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-function toggleMic() {
-    if (!SpeechRecognition) { toast('Speech recognition not supported in this browser'); return; }
-    if (micActive) { recognition.stop(); return; }
+function initRecognition() {
+    if (!SpeechRecognition) return;
     recognition = new SpeechRecognition();
     recognition.lang = 'en-US';
     recognition.interimResults = false;
@@ -349,9 +349,16 @@ function toggleMic() {
         inp.value = (inp.value + ' ' + txt).trim();
         aH(inp);
         document.getElementById('sBtn').disabled = !inp.value.trim();
+        micTriggered = true;
+        send();
     };
     recognition.onend = () => { micActive = false; document.getElementById('micBtn').classList.remove('recording'); };
     recognition.onerror = () => { micActive = false; document.getElementById('micBtn').classList.remove('recording'); };
+}
+if (SpeechRecognition) initRecognition();
+function toggleMic() {
+    if (!recognition) { toast('Speech recognition not supported in this browser'); return; }
+    if (micActive) { recognition.stop(); return; }
     recognition.start();
 }
 function speakText(text) {
