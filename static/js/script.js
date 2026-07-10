@@ -401,7 +401,8 @@ window.addEventListener('appinstalled', () => { document.getElementById('install
 
     document.addEventListener('touchstart', e => {
         const sb = document.getElementById('sb');
-        if (window.scrollY === 0 && sb.classList.contains('open')) { startY = e.touches[0].clientY; pulling = true; }
+        const sbVisible = innerWidth > 768 || sb.classList.contains('open');
+        if (window.scrollY === 0 && sbVisible) { startY = e.touches[0].clientY; pulling = true; }
     }, { passive: true });
 
     document.addEventListener('touchmove', e => {
@@ -419,7 +420,8 @@ window.addEventListener('appinstalled', () => { document.getElementById('install
         const dist = e.changedTouches[0].clientY - startY;
         indicator.style.top = '-50px';
         const sb = document.getElementById('sb');
-        if (dist >= threshold && sb.classList.contains('open')) window.location.reload();
+        const sbVisible = innerWidth > 768 || sb.classList.contains('open');
+        if (dist >= threshold && sbVisible) window.location.reload();
     });
 }());
 
