@@ -128,6 +128,45 @@ def chat():
     return jsonify({"answer": answer, "chat_id": chat_id})
 
 
+@chat_bp.route("/api/chats/<int:chat_id>", methods=["DELETE"])
+def delete_chat(chat_id):
+    user_email = session.get("user_email") or request.args.get("email", "").strip().lower()
+    if not user_email:
+        return jsonify({"error": "Unauthorized"}), 401
+    conn = db_connection()
+    if not conn:
+        return jsonify({"error": "DB error"}), 500
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM chats WHERE id = %s AND user_email = %s", (chat_id, user_email))
+            deleted = cur.rowcount
+        conn.commit()
+        return jsonify({"ok": deleted > 0})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
+
+
+@chat_bp.route("/api/chats", methods=["DELETE"])
+def delete_all_chats():
+    user_email = session.get("user_email") or request.args.get("email", "").strip().lower()
+    if not user_email:
+        return jsonify({"error": "Unauthorized"}), 401
+    conn = db_connection()
+    if not conn:
+        return jsonify({"error": "DB error"}), 500
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM chats WHERE user_email = %s", (user_email,))
+        conn.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
+
+
 @chat_bp.route("/api/chats")
 def get_user_chats():
     user_email = session.get("user_email") or request.args.get("email", "").strip().lower()

@@ -261,7 +261,28 @@ function newChat() {
 function saveRn() { if (!rnId) return; const c = chats.find(x => x.id === rnId), v = document.getElementById('rnIn').value.trim(); if (c && v) { c.title = v; save(); document.getElementById('tbT').textContent = v; renderSB(); toast('Chat renamed'); } closeMo('rnMo'); }
 document.getElementById('rnIn').addEventListener('keydown', e => { if (e.key === 'Enter') saveRn(); if (e.key === 'Escape') closeMo('rnMo'); });
 function openDlId(id) { delId = id; document.getElementById('dlTitle').textContent = 'Delete Chat'; document.getElementById('dlText').textContent = 'This conversation will be permanently deleted.'; document.getElementById('dlConfirm').textContent = 'Delete'; document.getElementById('dlConfirm').onclick = doDel; document.getElementById('dlMo').classList.add('on'); }
-function doDel() { if (!delId) return; chats = chats.filter(c => c.id !== delId); save(); if (activeId === delId) { if (chats.length) selChat(chats[0].id); else showWelcome(); } renderSB(); updateProfileStats(); closeMo('dlMo'); toast('Chat deleted'); }
+function doDel() {
+    if (!delId) return;
+    const c = chats.find(x => x.id === delId);
+    const id = delId;
+    closeMo('dlMo');
+    if (c && c.serverChatId) {
+        fetch('/api/chats/' + c.serverChatId, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_email: profile.email }) })
+            .then(r => r.json())
+            .then(d => {
+                if (d.ok) { _removeChat(id); toast('Chat deleted'); }
+                else toast('Delete failed: ' + (d.error || 'unknown error'));
+            })
+            .catch(() => toast('Delete failed'));
+    } else {
+        _removeChat(id); toast('Chat deleted');
+    }
+}
+function _removeChat(id) {
+    chats = chats.filter(x => x.id !== id); save();
+    if (activeId === id) { if (chats.length) selChat(chats[0].id); else showWelcome(); }
+    renderSB(); updateProfileStats();
+}
 
 /* ===== CLEAR ALL ===== */
 function clearAll() {
@@ -270,7 +291,14 @@ function clearAll() {
     document.getElementById('dlText').textContent = 'All conversations will be permanently deleted. This cannot be undone.';
     document.getElementById('dlConfirm').textContent = 'Clear All';
     document.getElementById('dlConfirm').onclick = function () {
-        chats = []; activeId = null; save(); showWelcome(); renderSB(); updateProfileStats(); closeMo('dlMo'); closeSettings(); toast('All chats cleared');
+        closeMo('dlMo');
+        fetch('/api/chats', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_email: profile.email }) })
+            .then(r => r.json())
+            .then(d => {
+                if (d.ok) { chats = []; activeId = null; save(); showWelcome(); renderSB(); updateProfileStats(); closeSettings(); toast('All chats cleared'); }
+                else toast('Clear failed: ' + (d.error || 'unknown error'));
+            })
+            .catch(() => toast('Clear failed'));
         document.getElementById('dlConfirm').onclick = doDel;
     };
     document.getElementById('dlMo').classList.add('on');
