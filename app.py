@@ -10,6 +10,7 @@ from routes.routes import route_bp
 from routes.admin import admin_dp
 from routes.chat import chat_bp
 from routes.auth import auth_bp
+from routes.memory import memory_bp
 
 app = Flask(__name__)
 
@@ -56,6 +57,7 @@ app.register_blueprint(route_bp)
 app.register_blueprint(admin_dp)
 app.register_blueprint(chat_bp)
 app.register_blueprint(auth_bp)
+app.register_blueprint(memory_bp)
 
 if __name__ == "__main__":
     app.run(debug=True)

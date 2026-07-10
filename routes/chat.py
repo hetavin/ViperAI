@@ -2,7 +2,9 @@ from flask import Blueprint, request, jsonify, session
 from threading import Thread
 import base64
 import json
-from services.llm_service import ask_llm
+from services.llm_service import ask_llm, extract_memories
+from services.vector_service import save_embedding, sync_all_embeddings
+from routes.memory import update_user_memories
 from connect import db_connection
 
 chat_bp = Blueprint("chat", __name__)
@@ -50,7 +52,53 @@ def _parse_msg(role, message, created_at):
     return entry
 
 
-def _save_to_db(user_email, user_name, chat_id, title, question, answer, result_box):
+def _fetch_context(user_email, chat_id):
+    """Fetch user memories and last 28 messages for context."""
+    conn = db_connection()
+    if not conn:
+        return [], []
+    try:
+        with conn.cursor() as cur:
+            # memories
+            cur.execute(
+                "SELECT id, category, title, content FROM user_memories WHERE user_email = %s ORDER BY category",
+                (user_email,)
+            )
+            memories = cur.fetchall()
+
+            # last 28 messages across all user chats (most recent first, then reverse)
+            if chat_id:
+                cur.execute(
+                    """SELECT role, message FROM chat_messages
+                       WHERE chat_id = %s ORDER BY created_at DESC LIMIT 28""",
+                    (chat_id,)
+                )
+            else:
+                cur.execute(
+                    """SELECT cm.role, cm.message FROM chat_messages cm
+                       JOIN chats c ON c.id = cm.chat_id
+                       WHERE c.user_email = %s ORDER BY cm.created_at DESC LIMIT 28""",
+                    (user_email,)
+                )
+            history = list(reversed(cur.fetchall()))
+        # normalize to plain dicts so they're safe across threads
+        memories = [dict(m) for m in memories]
+        history  = [dict(h) for h in history]
+        return memories, history
+    except Exception as e:
+        print(f"Context fetch error: {e}")
+        return [], []
+    finally:
+        conn.close()
+
+
+def _extract_and_save_memories(user_email, history, existing_memories):
+    memories = extract_memories(history, existing_memories)
+    if memories:
+        update_user_memories(user_email, memories)
+
+
+def _save_to_db(user_email, user_name, chat_id, title, question, answer, result_box, history, memories):
     conn = db_connection()
     if not conn:
         return
@@ -67,11 +115,20 @@ def _save_to_db(user_email, user_name, chat_id, title, question, answer, result_
                 "INSERT INTO chat_messages (chat_id, role, message) VALUES (%s, 'user', %s)",
                 (chat_id, question)
             )
+            user_msg_id = cur.lastrowid
             cur.execute(
                 "INSERT INTO chat_messages (chat_id, role, message) VALUES (%s, 'bot', %s)",
                 (chat_id, answer)
             )
+            bot_msg_id = cur.lastrowid
         conn.commit()
+        Thread(target=save_embedding, args=(user_msg_id, chat_id, 'user', question), daemon=True).start()
+        Thread(target=save_embedding, args=(bot_msg_id,  chat_id, 'bot',  answer),   daemon=True).start()
+        full_history = history + [
+            {"role": "user", "message": question},
+            {"role": "bot",  "message": answer}
+        ]
+        Thread(target=_extract_and_save_memories, args=(user_email, full_history, memories), daemon=True).start()
     except Exception as e:
         print(f"DB save error: {e}")
     finally:
@@ -107,25 +164,29 @@ def chat():
     user_email    = session_email or body_email
     user_name     = session.get("user_name") or body_name
 
-    answer = ask_llm(question, file_contents if file_contents else None)
+    memories, history = _fetch_context(user_email, chat_id)
+    answer = ask_llm(question, file_contents if file_contents else None, memories, history)
 
     stored_question = (json.dumps({'files': file_names, 'text': question}) if file_names else question)
 
     result_box = []
     _save_to_db(
-        user_email,
-        user_name,
-        chat_id,
-        title,
-        stored_question,
-        answer,
-        result_box
+        user_email, user_name, chat_id, title,
+        stored_question, answer, result_box, history, memories
     )
 
     if not chat_id and result_box:
         chat_id = result_box[0]
 
     return jsonify({"answer": answer, "chat_id": chat_id})
+
+
+@chat_bp.route("/api/vector/sync", methods=["POST"])
+def vector_sync():
+    if session.get("user_role") != "admin":
+        return jsonify({"error": "Unauthorized"}), 401
+    count = sync_all_embeddings()
+    return jsonify({"ok": True, "synced": count})
 
 
 @chat_bp.route("/api/chats/<int:chat_id>", methods=["DELETE"])
