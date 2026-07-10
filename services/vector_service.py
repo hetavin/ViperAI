@@ -1,8 +1,15 @@
 import struct
-from sentence_transformers import SentenceTransformer
+# from sentence_transformers import SentenceTransformer
 from connect import db_connection
 
-_model = SentenceTransformer("all-MiniLM-L6-v2")
+_model = None
+
+def get_model():
+    global _model
+    if _model is None:
+        from sentence_transformers import SentenceTransformer
+        _model = SentenceTransformer("all-MiniLM-L6-v2")
+    return _model
 
 
 def _to_blob(vector) -> bytes:
@@ -28,7 +35,7 @@ def _ensure_table(conn):
 
 
 def save_embedding(message_id: int, chat_id: int, role: str, text: str):
-    vector = _model.encode(text).tolist()
+    vector = get_model().encode(text).tolist()
     blob = _to_blob(vector)
     conn = db_connection()
     if not conn:
@@ -47,7 +54,7 @@ def save_embedding(message_id: int, chat_id: int, role: str, text: str):
 
 def save_memory_embedding(memory_id: int, content: str):
     """Encode memory content and update its embedding in user_memories."""
-    blob = _to_blob(_model.encode(content).tolist())
+    blob = _to_blob(get_model().encode(content).tolist())
     conn = db_connection()
     if not conn:
         return
@@ -82,7 +89,7 @@ def sync_all_embeddings():
             return 0
 
         texts = [r["message"] for r in rows]
-        vectors = _model.encode(texts, batch_size=64, show_progress_bar=False).tolist()
+        vectors = get_model().encode(texts, batch_size=64, show_progress_bar=False).tolist()
 
         with conn.cursor() as cur:
             cur.executemany(
