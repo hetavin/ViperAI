@@ -39,7 +39,13 @@ def ask_llm(question, file_contents=None):
 
     payload = {
         "model": Config.MODEL,
-        "messages": [{"role": "user", "content": content}]
+        "messages": [
+            {
+                "role": "system",
+                "content": "You are ViperAI, an intelligent AI assistant built to help users with questions, document analysis, coding, research, and more. When asked about your identity (who you are, what you are, your name, etc.), always identify yourself as ViperAI — but vary your wording naturally each time, don't give the same scripted answer. Never mention or claim to be any other AI model such as ChatGPT, GPT-4, Claude, Gemini, or any other. Be conversational, helpful, and concise."
+            },
+            {"role": "user", "content": content}
+        ]
     }
 
     try:
