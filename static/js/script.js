@@ -245,7 +245,12 @@ function send() {
             if (d.chat_id && !chat.serverChatId) { chat.serverChatId = d.chat_id; save(); }
             chat.messages.push({ role: 'bot', text: resp, time: new Date().toISOString() });
             save(); gen = false; renderMsgs(chat); updateProfileStats();
-            if (micTriggered) { speakText(resp); micTriggered = false; }
+            if (micTriggered) {
+                micTriggered = false;
+                if (voiceMode) {
+                    speakText(resp, () => { if (voiceMode) recognition.start(); });
+                }
+            }
         })
         .catch(() => {
             chat.messages.push({ role: 'bot', text: 'Sorry, I could not reach the server. Please try again.', time: new Date().toISOString() });
@@ -335,7 +340,7 @@ function renderFilePreview() {
 function removeFile(i) { attachedFiles.splice(i, 1); renderFilePreview(); }
 
 /* ===== MICROPHONE / SPEECH ===== */
-let recognition = null, micActive = false, micTriggered = false;
+let recognition = null, micActive = false, micTriggered = false, voiceMode = false;
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 function initRecognition() {
     if (!SpeechRecognition) return;
@@ -346,28 +351,46 @@ function initRecognition() {
     recognition.onresult = e => {
         const txt = e.results[0][0].transcript;
         const inp = document.getElementById('cIn');
-        inp.value = (inp.value + ' ' + txt).trim();
+        inp.value = txt.trim();
         aH(inp);
         document.getElementById('sBtn').disabled = !inp.value.trim();
         micTriggered = true;
         send();
     };
     recognition.onend = () => { micActive = false; document.getElementById('micBtn').classList.remove('recording'); };
-    recognition.onerror = () => { micActive = false; document.getElementById('micBtn').classList.remove('recording'); };
+    recognition.onerror = e => {
+        micActive = false;
+        document.getElementById('micBtn').classList.remove('recording');
+        if (e.error === 'not-allowed') { voiceMode = false; toast('Microphone permission denied'); }
+    };
 }
 if (SpeechRecognition) initRecognition();
 function toggleMic() {
     if (!recognition) { toast('Speech recognition not supported in this browser'); return; }
-    if (micActive) { recognition.stop(); return; }
+    if (voiceMode) { stopVoiceMode(); return; }
+    startVoiceMode();
+}
+function startVoiceMode() {
+    voiceMode = true;
+    document.getElementById('micBtn').classList.add('recording');
+    toast('Voice mode on — speak your question');
     recognition.start();
 }
-function speakText(text) {
-    if (!window.speechSynthesis) return;
+function stopVoiceMode() {
+    voiceMode = false;
+    window.speechSynthesis && window.speechSynthesis.cancel();
+    if (micActive) recognition.stop();
+    document.getElementById('micBtn').classList.remove('recording');
+    toast('Voice mode off');
+}
+function speakText(text, onDone) {
+    if (!window.speechSynthesis) { onDone && onDone(); return; }
     window.speechSynthesis.cancel();
     const plain = text.replace(/<[^>]+>/g, '').replace(/```[\s\S]*?```/g, 'code block').trim();
     const utt = new SpeechSynthesisUtterance(plain);
     utt.lang = 'en-US';
     utt.rate = 1;
+    utt.onend = () => { onDone && onDone(); };
     window.speechSynthesis.speak(utt);
 }
 
