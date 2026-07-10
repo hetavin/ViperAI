@@ -1,5 +1,4 @@
 import struct
-from sentence_transformers import SentenceTransformer
 from connect import db_connection
 
 _model = None
