@@ -14,7 +14,10 @@ from routes.memory import memory_bp
 
 app = Flask(__name__)
 
-app.secret_key = os.environ.get('SECRET_KEY', 'change-me-in-production')
+_secret_key = os.environ.get('SECRET_KEY')
+if not _secret_key:
+    raise RuntimeError("SECRET_KEY environment variable is not set")
+app.secret_key = _secret_key
 
 is_production = os.environ.get('FLASK_ENV') == 'production' or os.environ.get('RENDER') or os.environ.get('RAILWAY_ENVIRONMENT')
 app.config.update(

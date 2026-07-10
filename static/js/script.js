@@ -36,8 +36,8 @@ function fallbackCopy(text, done) {
     try { document.execCommand('copy'); } catch (e) { } ta.remove(); done();
 }
 function toast(msg) { const c = document.getElementById('toasts'), e = document.createElement('div'); e.className = 'tt tt-s'; e.textContent = msg; c.appendChild(e); setTimeout(() => e.remove(), 3200); }
-function save() { localStorage.setItem('bb_chats', JSON.stringify(chats)); localStorage.setItem('bb_profile', JSON.stringify(profile)); }
-function load() { const d = localStorage.getItem('bb_chats'); chats = d ? JSON.parse(d) : []; const p = localStorage.getItem('bb_profile'); if (p) profile = JSON.parse(p); }
+function save() {}
+function load() {}
 
 /* ===== THEME ===== */
 function setTheme(t) {
@@ -127,9 +127,6 @@ function renderSB() {
 
 /* ===== CHAT ===== */
 function selChat(id) {
-    if (!profile.email || profile.email === 'user@botbase.io') {
-        chats = chats.filter(c => c.id === id); save();
-    }
     activeId = id;
     const c = chats.find(x => x.id === id); if (!c) return;
     document.getElementById('tbT').textContent = c.title;
@@ -213,7 +210,7 @@ function send() {
     const filesToSend = [...attachedFiles];
     attachedFiles = []; renderFilePreview();
     const filesMeta = filesToSend.map(f => ({ name: f.name, type: f.type }));
-    chat.messages.push({ role: 'user', text: txt, time: new Date().toISOString(), files: filesMeta }); save();
+    chat.messages.push({ role: 'user', text: txt, time: new Date().toISOString(), files: filesMeta });
     inp.value = ''; inp.style.height = 'auto'; document.getElementById('sBtn').disabled = true;
     renderMsgs(chat); renderSB(); updateProfileStats();
     gen = true;
@@ -227,24 +224,22 @@ function send() {
         fd.append('message', txt);
         fd.append('chat_id', chat.serverChatId || '');
         fd.append('title', chat.title);
-        fd.append('user_email', profile.email);
-        fd.append('user_name', profile.name);
         filesToSend.forEach(f => fd.append('files', f));
         fetchOpts = { method: 'POST', body: fd };
     } else {
         fetchOpts = {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: txt, chat_id: chat.serverChatId || null, title: chat.title, user_email: profile.email, user_name: profile.name })
+            body: JSON.stringify({ message: txt, chat_id: chat.serverChatId || null, title: chat.title })
         };
     }
     fetch('/chat', fetchOpts)
         .then(r => r.json())
         .then(d => {
             const resp = d.answer || 'Sorry, no answer was returned.';
-            if (d.chat_id && !chat.serverChatId) { chat.serverChatId = d.chat_id; save(); }
+            if (d.chat_id && !chat.serverChatId) { chat.serverChatId = d.chat_id; }
             chat.messages.push({ role: 'bot', text: resp, time: new Date().toISOString() });
-            save(); gen = false; renderMsgs(chat); updateProfileStats();
+            gen = false; renderMsgs(chat); updateProfileStats();
             if (micTriggered) {
                 micTriggered = false;
                 if (voiceMode) {
@@ -254,17 +249,16 @@ function send() {
         })
         .catch(() => {
             chat.messages.push({ role: 'bot', text: 'Sorry, I could not reach the server. Please try again.', time: new Date().toISOString() });
-            save(); gen = false; renderMsgs(chat); updateProfileStats(); micTriggered = false;
+            gen = false; renderMsgs(chat); updateProfileStats(); micTriggered = false;
         });
 }
 
 /* ===== NEW / RENAME / DELETE ===== */
 function newChat() {
-    if (!profile.email || profile.email === 'user@botbase.io') { chats = []; save(); }
     showWelcome(); document.getElementById('cIn').focus();
     if (innerWidth <= 768) document.getElementById('sb').classList.remove('open');
 }
-function saveRn() { if (!rnId) return; const c = chats.find(x => x.id === rnId), v = document.getElementById('rnIn').value.trim(); if (c && v) { c.title = v; save(); document.getElementById('tbT').textContent = v; renderSB(); toast('Chat renamed'); } closeMo('rnMo'); }
+function saveRn() { if (!rnId) return; const c = chats.find(x => x.id === rnId), v = document.getElementById('rnIn').value.trim(); if (c && v) { c.title = v; document.getElementById('tbT').textContent = v; renderSB(); toast('Chat renamed'); } closeMo('rnMo'); }
 document.getElementById('rnIn').addEventListener('keydown', e => { if (e.key === 'Enter') saveRn(); if (e.key === 'Escape') closeMo('rnMo'); });
 function openDlId(id) { delId = id; document.getElementById('dlTitle').textContent = 'Delete Chat'; document.getElementById('dlText').textContent = 'This conversation will be permanently deleted.'; document.getElementById('dlConfirm').textContent = 'Delete'; document.getElementById('dlConfirm').onclick = doDel; document.getElementById('dlMo').classList.add('on'); }
 function doDel() {
@@ -273,7 +267,7 @@ function doDel() {
     const id = delId;
     closeMo('dlMo');
     if (c && c.serverChatId) {
-        fetch('/api/chats/' + c.serverChatId, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_email: profile.email }) })
+        fetch('/api/chats/' + c.serverChatId, { method: 'DELETE' })
             .then(r => r.json())
             .then(d => {
                 if (d.ok) { _removeChat(id); toast('Chat deleted'); }
@@ -285,7 +279,7 @@ function doDel() {
     }
 }
 function _removeChat(id) {
-    chats = chats.filter(x => x.id !== id); save();
+    chats = chats.filter(x => x.id !== id);
     if (activeId === id) { if (chats.length) selChat(chats[0].id); else showWelcome(); }
     renderSB(); updateProfileStats();
 }
@@ -298,10 +292,10 @@ function clearAll() {
     document.getElementById('dlConfirm').textContent = 'Clear All';
     document.getElementById('dlConfirm').onclick = function () {
         closeMo('dlMo');
-        fetch('/api/chats', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_email: profile.email }) })
+        fetch('/api/chats', { method: 'DELETE' })
             .then(r => r.json())
             .then(d => {
-                if (d.ok) { chats = []; activeId = null; save(); showWelcome(); renderSB(); updateProfileStats(); closeSettings(); toast('All chats cleared'); }
+                if (d.ok) { chats = []; activeId = null; showWelcome(); renderSB(); updateProfileStats(); closeSettings(); toast('All chats cleared'); }
                 else toast('Clear failed: ' + (d.error || 'unknown error'));
             })
             .catch(() => toast('Clear failed'));
@@ -455,13 +449,7 @@ window.addEventListener('appinstalled', () => { document.getElementById('install
     });
 }());
 
-/* ===== GUEST CLEANUP ON LEAVE ===== */
-window.addEventListener('pagehide', () => {
-    if (!profile.email || profile.email === 'user@botbase.io') {
-        localStorage.removeItem('bb_chats');
-        localStorage.removeItem('bb_profile');
-    }
-});
+
 
 /* ===== INIT ===== */
 setTheme(localStorage.getItem('bb_theme') || 'dark');
@@ -473,7 +461,6 @@ fetch('/api/auth/me')
     .then(r => r.json())
     .then(u => {
         if (u.logged_in) {
-            load();
             profile.name = u.name;
             profile.email = u.email;
             document.getElementById('pfName').textContent = u.name;
@@ -483,10 +470,7 @@ fetch('/api/auth/me')
             document.getElementById('sbProfile').style.display = 'block';
             document.getElementById('setLogoutBtn').style.display = 'flex';
             document.getElementById('setLogoutDivider').style.display = 'block';
-            if (chats.length) { selChat(chats[0].id); updateProfileStats(); renderSB(); }
-            const safeEmail = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/.test(u.email) ? u.email : '';
-            if (!safeEmail) return;
-            fetch('/api/chats?email=' + encodeURIComponent(safeEmail))
+            fetch('/api/chats')
                 .then(r => r.json())
                 .then(data => {
                     if (data.chats && data.chats.length) {
@@ -497,7 +481,6 @@ fetch('/api/auth/me')
                             createdAt: c.createdAt,
                             messages: c.messages
                         }));
-                        save();
                         selChat(chats[0].id);
                         updateProfileStats();
                         renderSB();
@@ -506,8 +489,6 @@ fetch('/api/auth/me')
         } else {
             chats = []; activeId = null;
             profile = { name: 'User', email: 'user@botbase.io' };
-            localStorage.removeItem('bb_chats');
-            localStorage.removeItem('bb_profile');
             document.getElementById('sbAuth').style.display = 'block';
             document.getElementById('sbProfile').style.display = 'none';
             showWelcome(); renderSB(); updateProfileStats();
@@ -541,11 +522,5 @@ fetch('/api/auth/me')
 function doLogout() {
     fetch('/api/auth/logout', { method: 'POST' })
         .then(r => r.json())
-        .then(d => {
-            chats = []; activeId = null;
-            profile = { name: 'User', email: 'user@botbase.io' };
-            localStorage.removeItem('bb_chats');
-            localStorage.removeItem('bb_profile');
-            window.location.href = d.redirect;
-        });
+        .then(d => { window.location.href = d.redirect; });
 }

@@ -142,8 +142,6 @@ def chat():
         question  = (request.form.get("message") or "").strip()
         chat_id   = request.form.get("chat_id") or None
         title     = request.form.get("title") or question[:60]
-        body_email = (request.form.get("user_email") or "").strip().lower()
-        body_name  = (request.form.get("user_name") or "").strip()
         files      = request.files.getlist("files")
         file_contents = _extract_file_contents(files) if files else []
         file_names = [f.filename for f in files] if files else []
@@ -152,17 +150,27 @@ def chat():
         question   = (data.get("message") or "").strip()
         chat_id    = data.get("chat_id")
         title      = data.get("title") or question[:60]
-        body_email = (data.get("user_email") or "").strip().lower()
-        body_name  = (data.get("user_name") or "").strip()
         file_contents = []
         file_names = []
 
     if not question:
         return jsonify({"error": "Empty message"}), 400
 
-    session_email = session.get("user_email")
-    user_email    = session_email or body_email
-    user_name     = session.get("user_name") or body_name
+    user_email = session.get("user_email")
+    if not user_email:
+        return jsonify({"error": "Unauthorized"}), 401
+    user_name = session.get("user_name") or ""
+
+    if chat_id:
+        conn = db_connection()
+        if conn:
+            try:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT id FROM chats WHERE id = %s AND user_email = %s", (chat_id, user_email))
+                    if not cur.fetchone():
+                        return jsonify({"error": "Forbidden"}), 403
+            finally:
+                conn.close()
 
     memories, history = _fetch_context(user_email, chat_id)
     answer = ask_llm(question, file_contents if file_contents else None, memories, history)
@@ -191,7 +199,7 @@ def vector_sync():
 
 @chat_bp.route("/api/chats/<int:chat_id>", methods=["DELETE"])
 def delete_chat(chat_id):
-    user_email = session.get("user_email") or request.args.get("email", "").strip().lower()
+    user_email = session.get("user_email")
     if not user_email:
         return jsonify({"error": "Unauthorized"}), 401
     conn = db_connection()
@@ -211,7 +219,7 @@ def delete_chat(chat_id):
 
 @chat_bp.route("/api/chats", methods=["DELETE"])
 def delete_all_chats():
-    user_email = session.get("user_email") or request.args.get("email", "").strip().lower()
+    user_email = session.get("user_email")
     if not user_email:
         return jsonify({"error": "Unauthorized"}), 401
     conn = db_connection()
@@ -230,9 +238,9 @@ def delete_all_chats():
 
 @chat_bp.route("/api/chats")
 def get_user_chats():
-    user_email = session.get("user_email") or request.args.get("email", "").strip().lower()
+    user_email = session.get("user_email")
     if not user_email:
-        return jsonify({"chats": []})
+        return jsonify({"error": "Unauthorized"}), 401
 
     conn = db_connection()
     if not conn:

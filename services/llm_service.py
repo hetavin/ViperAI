@@ -1,3 +1,4 @@
+import logging
 import requests
 import base64
 import json
@@ -146,5 +147,6 @@ Now output the JSON array for the actual memories and conversation above. Respon
             if raw.startswith("json"):
                 raw = raw[4:]
         return json.loads(raw)
-    except Exception:
+    except Exception as e:
+        logging.exception("extract_memories: failed to parse LLM response: %s", e)
         return []
