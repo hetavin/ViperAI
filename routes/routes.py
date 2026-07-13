@@ -32,7 +32,6 @@ def login_required(f):
 
 
 @route_bp.route('/')
-@login_required
 def index():
     return render_template('index.html')
 
