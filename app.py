@@ -1,7 +1,14 @@
 import os
+import logging
+import warnings
 from datetime import timedelta
 from config import _load_env
 _load_env()
+
+logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
+logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
+logging.getLogger("transformers").setLevel(logging.ERROR)
+warnings.filterwarnings("ignore", category=UserWarning)
 
 from flask import Flask, Response
 from authlib.integrations.flask_client import OAuth
@@ -61,6 +68,18 @@ app.register_blueprint(admin_dp)
 app.register_blueprint(chat_bp)
 app.register_blueprint(auth_bp)
 app.register_blueprint(memory_bp)
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    from flask import jsonify, request
+    from werkzeug.exceptions import HTTPException
+    # Let HTTP exceptions (404, 405, etc.) pass through with their original status
+    if isinstance(e, HTTPException):
+        return e
+    logging.exception("Unhandled exception on %s", request.path)
+    if request.path.startswith('/api') or request.path == '/chat':
+        return jsonify({"error": "An unexpected error occurred."}), 500
+    return "An unexpected error occurred.", 500
 
 if __name__ == "__main__":
     app.run(debug=True)

@@ -1,5 +1,13 @@
 import struct
+import logging
+import warnings
+import os
 from connect import db_connection
+
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
+logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
+warnings.filterwarnings("ignore")
 
 _model = None
 
@@ -7,7 +15,15 @@ def get_model():
     global _model
     if _model is None:
         from sentence_transformers import SentenceTransformer
+        import tqdm
+        # suppress progress bars during weight loading
+        _orig = tqdm.tqdm.__init__
+        def _silent_init(self, *a, **kw):
+            kw["disable"] = True
+            _orig(self, *a, **kw)
+        tqdm.tqdm.__init__ = _silent_init
         _model = SentenceTransformer("all-MiniLM-L6-v2")
+        tqdm.tqdm.__init__ = _orig
     return _model
 
 

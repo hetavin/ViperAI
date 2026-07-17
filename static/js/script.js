@@ -10,18 +10,50 @@ function fd(iso) { const n = Date.now() - new Date(iso).getTime(); if (n < 6e4) 
 const ini = n => n.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
 const esc = t => { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; };
 function rt(t) {
+    // Extract markdown links before escaping so brackets/parens aren't mangled
+    const links = [];
+    t = t.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, label, url) => {
+        links.push(`<a href="${url}" target="_blank" rel="noopener noreferrer" class="md-link" data-url="${url}">${label} <i class="fas fa-external-link-alt" style="font-size:9px;opacity:.6"></i></a>`);
+        return `\x00LINK${links.length - 1}\x00`;
+    });
     let h = esc(t);
+    // Restore links
+    h = h.replace(/\x00LINK(\d+)\x00/g, (_, i) => links[+i]);
+    // code blocks
     h = h.replace(/```(\w*)\n([\s\S]*?)```/g, (m, lang, code) => {
         const l = esc(lang || 'code');
         return `<div class="cb"><div class="cb-h"><span class="cb-l">${l}</span><button class="cb-c" onclick="copyCode(this)" title="Copy"><i class="fas fa-copy"></i></button></div><pre><code class="language-${l}">${code.replace(/\n$/, '')}</code></pre></div>`;
     });
     h = h.replace(/`([^`]+)`/g, '<code>$1</code>');
+    // headings
+    h = h.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
+    h = h.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+    h = h.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+    h = h.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+    // bold / italic
     h = h.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
     h = h.replace(/\*(.+?)\*/g, '<em>$1</em>');
+    // bare URLs not already inside an <a> tag
+    h = h.replace(/(?<!href="|src="|=")https?:\/\/[^\s<>"']+/g, url => {
+        let label;
+        try {
+            const u = new URL(url);
+            const seg = u.pathname.replace(/\/$/, '').split('/').filter(Boolean).pop();
+            label = seg ? decodeURIComponent(seg).replace(/[-_]/g, ' ') : u.hostname.replace(/^www\./, '');
+        } catch { label = url; }
+        return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="md-link" data-url="${url}">${label} <i class="fas fa-external-link-alt" style="font-size:9px;opacity:.6"></i></a>`;
+    });
+    // horizontal rule
+    h = h.replace(/^---+$/gm, '<hr class="md-hr">');
+    // lists
     h = h.replace(/^- (.+)$/gm, '<li>$1</li>');
     h = h.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
     h = h.replace(/^\d+\.\s(.+)$/gm, '<li>$1</li>');
-    h = h.split('\n\n').map(b => { if (/^<(pre|ul|ol|li|div class="cb")/.test(b)) return b; return '<p>' + b.replace(/\n/g, '<br>') + '</p>'; }).join('');
+    // paragraphs
+    h = h.split('\n\n').map(b => {
+        if (/^<(pre|ul|ol|li|div|h[1-4]|hr)/.test(b.trim())) return b;
+        return '<p>' + b.replace(/\n/g, '<br>') + '</p>';
+    }).join('');
     return h;
 }
 function copyCode(btn) {
@@ -135,8 +167,8 @@ function selChat(id) {
 }
 function showWelcome() {
     activeId = null;
-    document.getElementById('tbT').textContent = 'New Chat';
-    document.getElementById('msIn').innerHTML = `<div class="wc"><div class="wc-ic"><i class="fas fa-robot"></i></div><h2>How can I help you?</h2><p>Ask me anything about your uploaded documents — company policies, API docs, onboarding, troubleshooting, and more.</p><div class="wc-g"><div class="wc-c" onclick="useS('What is the remote work policy?')"><div class="wc-c-t">Remote Work Policy</div><div class="wc-c-d">Rules for working from home</div></div><div class="wc-c" onclick="useS('How do I authenticate with the API?')"><div class="wc-c-t">API Authentication</div><div class="wc-c-d">Getting started with the API</div></div><div class="wc-c" onclick="useS('What happens on my first day?')"><div class="wc-c-t">First Day Guide</div><div class="wc-c-d">New employee onboarding steps</div></div><div class="wc-c" onclick="useS('How do I fix a 500 error on checkout?')"><div class="wc-c-t">Troubleshoot Errors</div><div class="wc-c-d">Debug common checkout issues</div></div></div></div>`;
+    document.getElementById('tbT').textContent = '✨ New Chat';
+    document.getElementById('msIn').innerHTML = `<div class="wc"><div class="wc-ic"><i class="fas fa-robot"></i></div><h2>⚡ How can I help you?</h2><p>Ask me anything — I'll search the web, find places, news, videos & more in real time. 🌐</p><div class="wc-g"><div class="wc-c" onclick="useS('What is the latest news today?')"><div class="wc-c-t">📰 Latest News</div><div class="wc-c-d">Real-time news from the web</div></div><div class="wc-c" onclick="useS('Tell me about the Alpha movie 2026')"><div class="wc-c-t">🎬 Movies & Shows</div><div class="wc-c-d">Info, cast, reviews & trailers</div></div><div class="wc-c" onclick="useS('Best restaurants near me')"><div class="wc-c-t">📍 Places & Maps</div><div class="wc-c-d">Locations, ratings & directions</div></div><div class="wc-c" onclick="useS('Write a Python function to sort a list')"><div class="wc-c-t">💻 Code & Tech</div><div class="wc-c-d">Write, debug & explain code</div></div></div></div>`;
     renderSB();
 }
 function useS(t) { const i = document.getElementById('cIn'); i.value = t; aH(i); document.getElementById('sBtn').disabled = false; send(); }
@@ -151,7 +183,7 @@ function renderMsgs(c) {
         wrap.style.marginBottom = mb;
         if (msg.role === 'user') {
             const avatar = `<div class="mg-a u">${ini(profile.name)}</div>`;
-            const header = `<div class="mg-h">${avatar}<span class="mg-n">${esc(profile.name)}</span><span class="mg-t">${ft(msg.time)}</span></div>`;
+            const header = `<div class="mg-h">${avatar}<span class="mg-n">👤 ${esc(profile.name)}</span><span class="mg-t">🕐 ${ft(msg.time)}</span></div>`;
             let fileChipsHtml = '';
             if (msg.files && msg.files.length) {
                 fileChipsHtml = '<div class="mg-files">' + msg.files.map(f => {
@@ -161,12 +193,12 @@ function renderMsgs(c) {
                     return `<span class="ia-file-chip" style="pointer-events:none">${icon}<span>${esc(name)}</span></span>`;
                 }).join('') + '</div>';
             }
-            wrap.innerHTML = header + `<div class="mg-b">${fileChipsHtml}<p>${esc(msg.text || '')}</p></div>`;
+            wrap.innerHTML = header + `<div class="mg-b mg-b-user">${fileChipsHtml}<p>${esc(msg.text || '')}</p></div>`;
         } else {
-            const header = `<div class="mg-h"><div class="mg-a b"><i class="fas fa-robot" style="font-size:10px"></i></div><span class="mg-n">ViperAI</span><span class="mg-t">${ft(msg.time)}</span></div>`;
+            const header = `<div class="mg-h"><div class="mg-a b">🤖</div><span class="mg-n">⚡ ViperAI</span><span class="mg-badge">AI</span><span class="mg-t">🕐 ${ft(msg.time)}</span></div>`;
             wrap.innerHTML = header;
             const body = document.createElement('div');
-            body.className = 'mg-b';
+            body.className = 'mg-b mg-b-bot';
             body.innerHTML = rt(msg.text || '');
             wrap.appendChild(body);
         }
@@ -234,9 +266,12 @@ function send() {
         };
     }
     fetch('/chat', fetchOpts)
-        .then(r => r.json())
+        .then(r => {
+            if (!r.ok) return r.text().then(t => { throw new Error(t || r.statusText); });
+            return r.json();
+        })
         .then(d => {
-            const resp = d.answer || 'Sorry, no answer was returned.';
+            const resp = d.answer || d.error || 'Sorry, no answer was returned.';
             if (d.chat_id && !chat.serverChatId) { chat.serverChatId = d.chat_id; }
             chat.messages.push({ role: 'bot', text: resp, time: new Date().toISOString() });
             gen = false; renderMsgs(chat); updateProfileStats();
@@ -247,8 +282,9 @@ function send() {
                 }
             }
         })
-        .catch(() => {
-            chat.messages.push({ role: 'bot', text: 'Sorry, I could not reach the server. Please try again.', time: new Date().toISOString() });
+        .catch(err => {
+            const msg = err && err.message ? `Error: ${err.message}` : 'Something went wrong. Please try again.';
+            chat.messages.push({ role: 'bot', text: msg, time: new Date().toISOString() });
             gen = false; renderMsgs(chat); updateProfileStats(); micTriggered = false;
         });
 }

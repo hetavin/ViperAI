@@ -173,7 +173,7 @@ def chat():
                 conn.close()
 
     memories, history = _fetch_context(user_email, chat_id)
-    answer = ask_llm(question, file_contents if file_contents else None, memories, history)
+    answer = ask_llm(question, file_contents if file_contents else None, memories, history, user_email)
 
     stored_question = (json.dumps({'files': file_names, 'text': question}) if file_names else question)
 
