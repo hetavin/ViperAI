@@ -1,6 +1,5 @@
 import os
-import json
-import struct
+import hashlib
 
 from config import _load_env
 from connect import db_connection
@@ -8,7 +7,6 @@ from connect import db_connection
 from langchain_groq import ChatGroq
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
-from sentence_transformers import SentenceTransformer
 
 _load_env()
 
@@ -18,18 +16,9 @@ _load_env()
 # =====================================================
 
 memory_llm = ChatGroq(
-    model=os.environ.get["GROQ_MODEL"],
+    model=os.environ.get("GROQ_MODEL"),
     api_key=os.environ["GROQ_API_KEY"],
     temperature=0
-)
-
-
-# =====================================================
-# Embedding Model
-# =====================================================
-
-embedding_model = SentenceTransformer(
-    "all-MiniLM-L6-v2"
 )
 
 memory_prompt = PromptTemplate.from_template("""
@@ -102,14 +91,8 @@ memory_chain = (
     | JsonOutputParser()
 )
 
-def embedding_to_blob(text: str):
-
-    vector = embedding_model.encode(text)
-
-    return struct.pack(
-        f"{len(vector)}f",
-        *vector
-    )
+def content_hash(text: str) -> bytes:
+    return hashlib.sha256(text.encode()).digest()
     
 # =====================================================
 # Fetch Recent Messages
@@ -270,7 +253,7 @@ def save_memory(user_email: str, memory: dict):
         if category not in valid_categories:
             category = "other"
 
-        embedding = embedding_to_blob(content)
+        chash = content_hash(content)
 
         conn = db_connection()
         cursor = conn.cursor()
@@ -279,7 +262,7 @@ def save_memory(user_email: str, memory: dict):
             """
             SELECT
                 id,
-                content
+                embedding
             FROM user_memories
             WHERE
                 user_email=%s
@@ -304,12 +287,12 @@ def save_memory(user_email: str, memory: dict):
 
             if isinstance(existing, dict):
                 memory_id = existing["id"]
-                old_content = existing["content"]
+                old_hash = existing["embedding"]
             else:
                 memory_id = existing[0]
-                old_content = existing[1]
+                old_hash = existing[1]
 
-            if old_content != content:
+            if old_hash != chash:
 
                 cursor.execute(
                     """
@@ -322,7 +305,7 @@ def save_memory(user_email: str, memory: dict):
                     """,
                     (
                         content,
-                        embedding,
+                        chash,
                         memory_id
                     )
                 )
@@ -363,7 +346,7 @@ def save_memory(user_email: str, memory: dict):
                 category,
                 title,
                 content,
-                embedding
+                chash
             )
         )
 
