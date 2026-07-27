@@ -10,20 +10,51 @@ function fd(iso) { const n = Date.now() - new Date(iso).getTime(); if (n < 6e4) 
 const ini = n => n.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
 const esc = t => { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; };
 function rt(t) {
-    // Extract markdown links before escaping so brackets/parens aren't mangled
+    const saved = [];
+    const save = html => { saved.push(html); return `\x00SAVED${saved.length - 1}\x00`; };
+
+    // 1. Extract fenced code blocks before anything else
+    t = t.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => {
+        const l = esc(lang || 'code');
+        return save(`<div class="cb"><div class="cb-h"><span class="cb-l">${l}</span><button class="cb-c" onclick="copyCode(this)" title="Copy"><i class="fas fa-copy"></i></button></div><pre><code class="language-${l}">${esc(code.replace(/\n$/, ''))}</code></pre></div>`);
+    });
+
+    // 2. Extract markdown tables before escaping (pipes must be raw)
+    t = t.replace(/^([ \t]*\|.+\|[ \t]*\n)([ \t]*\|[ \t]*[-:| \t]+\|[ \t]*\n)((?:[ \t]*\|.+\|[ \t]*\n?)*)/gm, (_, head, sep, body) => {
+        const parseRow = row => row.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+        const aligns = parseRow(sep).map(c => {
+            if (/^:-+:$/.test(c.trim())) return 'center';
+            if (/^-+:$/.test(c.trim()))  return 'right';
+            return 'left';
+        });
+        const inlineRt = s => s
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.+?)\*/g, '<em>$1</em>')
+            .replace(/`([^`]+)`/g, '<code>$1</code>');
+        const ths = parseRow(head).map((c, i) =>
+            `<th style="text-align:${aligns[i] || 'left'}">${inlineRt(esc(c))}</th>`).join('');
+        const bodyRows = body.trim().split('\n').filter(Boolean);
+        const trs = bodyRows.map(row =>
+            '<tr>' + parseRow(row).map((c, i) =>
+                `<td style="text-align:${aligns[i] || 'left'}">${inlineRt(esc(c))}</td>`).join('') + '</tr>').join('');
+        return save(`<div class="md-tbl-wrap"><table class="md-tbl"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table></div>`);
+    });
+
+    // 3. Extract markdown links
     const links = [];
     t = t.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, label, url) => {
-        links.push(`<a href="${url}" target="_blank" rel="noopener noreferrer" class="md-link" data-url="${url}">${label} <i class="fas fa-external-link-alt" style="font-size:9px;opacity:.6"></i></a>`);
+        links.push(`<a href="${url}" target="_blank" rel="noopener noreferrer" class="md-link" data-url="${url}">${esc(label)} <i class="fas fa-external-link-alt" style="font-size:9px;opacity:.6"></i></a>`);
         return `\x00LINK${links.length - 1}\x00`;
     });
+
+    // 4. Escape remaining text
     let h = esc(t);
-    // Restore links
+
+    // 5. Restore links and saved blocks
     h = h.replace(/\x00LINK(\d+)\x00/g, (_, i) => links[+i]);
-    // code blocks
-    h = h.replace(/```(\w*)\n([\s\S]*?)```/g, (m, lang, code) => {
-        const l = esc(lang || 'code');
-        return `<div class="cb"><div class="cb-h"><span class="cb-l">${l}</span><button class="cb-c" onclick="copyCode(this)" title="Copy"><i class="fas fa-copy"></i></button></div><pre><code class="language-${l}">${code.replace(/\n$/, '')}</code></pre></div>`;
-    });
+    h = h.replace(/\x00SAVED(\d+)\x00/g, (_, i) => saved[+i]);
+
+    // inline code
     h = h.replace(/`([^`]+)`/g, '<code>$1</code>');
     // headings
     h = h.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
@@ -33,7 +64,7 @@ function rt(t) {
     // bold / italic
     h = h.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
     h = h.replace(/\*(.+?)\*/g, '<em>$1</em>');
-    // bare URLs not already inside an <a> tag
+    // bare URLs
     h = h.replace(/(?<!href="|src="|=")https?:\/\/[^\s<>"']+/g, url => {
         let label;
         try {
@@ -49,21 +80,6 @@ function rt(t) {
     h = h.replace(/(^&gt;.+\n?)+/gm, block => {
         const inner = block.replace(/^&gt;\s?/gm, '').trim();
         return `<blockquote class="md-bq">${inner}</blockquote>`;
-    });
-    // tables
-    h = h.replace(/^(\|.+\|\n)(\|[-| :]+\|\n)((?:\|.+\|\n?)*)/gm, (_, head, sep, body) => {
-        const parseRow = row => row.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim());
-        const aligns = parseRow(sep).map(c => {
-            if (/^:-+:$/.test(c)) return 'center';
-            if (/^-+:$/.test(c))  return 'right';
-            return 'left';
-        });
-        const ths = parseRow(head).map((c, i) =>
-            `<th style="text-align:${aligns[i] || 'left'}">${c}</th>`).join('');
-        const trs = body.trim().split('\n').filter(Boolean).map(row =>
-            '<tr>' + parseRow(row).map((c, i) =>
-                `<td style="text-align:${aligns[i] || 'left'}">${c}</td>`).join('') + '</tr>').join('');
-        return `<div class="md-tbl-wrap"><table class="md-tbl"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table></div>`;
     });
     // lists
     h = h.replace(/^- (.+)$/gm, '<li>$1</li>');
@@ -297,20 +313,83 @@ function send() {
         .then(d => {
             const resp = d.answer || d.error || 'Sorry, no answer was returned.';
             if (d.chat_id && !chat.serverChatId) { chat.serverChatId = d.chat_id; }
-            chat.messages.push({ role: 'bot', text: resp, time: new Date().toISOString() });
-            gen = false; renderMsgs(chat); updateProfileStats();
-            if (micTriggered) {
-                micTriggered = false;
-                if (voiceMode) {
-                    speakText(resp, () => { if (voiceMode) recognition.start(); });
+            const tip2 = document.getElementById('typI'); if (tip2) tip2.remove();
+            streamBotResponse(resp, chat, () => {
+                gen = false; updateProfileStats();
+                if (micTriggered) {
+                    micTriggered = false;
+                    if (voiceMode) speakText(resp, () => { if (voiceMode) recognition.start(); });
                 }
-            }
+            });
         })
         .catch(err => {
+            const tip3 = document.getElementById('typI'); if (tip3) tip3.remove();
             const msg = err && err.message ? `Error: ${err.message}` : 'Something went wrong. Please try again.';
             chat.messages.push({ role: 'bot', text: msg, time: new Date().toISOString() });
             gen = false; renderMsgs(chat); updateProfileStats(); micTriggered = false;
         });
+}
+
+/* ===== STREAMING RENDERER ===== */
+function streamBotResponse(fullText, chat, onDone) {
+    const inner = document.getElementById('msIn');
+    const ms = document.getElementById('ms');
+
+    // Build the bot message wrapper (no content yet)
+    const wrap = document.createElement('div');
+    wrap.className = 'mg';
+    wrap.style.marginBottom = compact ? '10px' : '20px';
+    const header = `<div class="mg-h"><div class="mg-a b">🤖</div><span class="mg-n">⚡ ViperAI</span><span class="mg-badge">AI</span><span class="mg-t">🕐 ${ft(new Date().toISOString())}</span></div>`;
+    wrap.innerHTML = header;
+    const body = document.createElement('div');
+    body.className = 'mg-b mg-b-bot';
+    wrap.appendChild(body);
+    inner.appendChild(wrap);
+    ms.scrollTop = 1e6;
+
+    // Split into paragraphs / lines, filter empties
+    const chunks = fullText.split(/\n\n+/).flatMap(block => {
+        // keep code blocks whole
+        if (/^```/.test(block.trim())) return [block];
+        // split long blocks by newline
+        const lines = block.split('\n').filter(l => l.trim());
+        return lines.length > 1 ? lines : [block];
+    }).filter(c => c.trim());
+
+    let accumulated = '';
+    let i = 0;
+
+    function appendNext() {
+        if (i >= chunks.length) {
+            // Finalise: store full message and highlight code
+            chat.messages.push({ role: 'bot', text: fullText, time: new Date().toISOString() });
+            hlCode(body);
+            onDone && onDone();
+            return;
+        }
+        accumulated += (i > 0 ? '\n\n' : '') + chunks[i];
+        i++;
+
+        // Re-render accumulated markdown into body
+        body.innerHTML = rt(accumulated);
+
+        // Animate only the last rendered child element
+        const children = body.children;
+        if (children.length) {
+            const last = children[children.length - 1];
+            last.classList.add('stream-chunk');
+            // Remove class after animation so it doesn't replay
+            last.addEventListener('animationend', () => last.classList.remove('stream-chunk'), { once: true });
+        }
+
+        ms.scrollTop = 1e6;
+
+        // Delay: slightly longer for code blocks, shorter for lines
+        const delay = /^```/.test(chunks[i - 1]) ? 80 : 38;
+        setTimeout(appendNext, delay);
+    }
+
+    appendNext();
 }
 
 /* ===== NEW / RENAME / DELETE ===== */
