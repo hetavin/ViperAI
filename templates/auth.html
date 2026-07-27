@@ -23,7 +23,7 @@
         <span id="themeAuthLabel">Dark</span>
     </div>
 
-    <div id="authScreen">
+    <div id="authScreen" data-mode="{{ request.args.get('mode', '') }}">
         <div class="auth-card">
             <div style="display:flex;align-items:center;gap:9px;margin-bottom:24px">
                 <div

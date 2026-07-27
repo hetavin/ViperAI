@@ -10,18 +10,70 @@ function fd(iso) { const n = Date.now() - new Date(iso).getTime(); if (n < 6e4) 
 const ini = n => n.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
 const esc = t => { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; };
 function rt(t) {
+    // Extract markdown links before escaping so brackets/parens aren't mangled
+    const links = [];
+    t = t.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, label, url) => {
+        links.push(`<a href="${url}" target="_blank" rel="noopener noreferrer" class="md-link" data-url="${url}">${label} <i class="fas fa-external-link-alt" style="font-size:9px;opacity:.6"></i></a>`);
+        return `\x00LINK${links.length - 1}\x00`;
+    });
     let h = esc(t);
+    // Restore links
+    h = h.replace(/\x00LINK(\d+)\x00/g, (_, i) => links[+i]);
+    // code blocks
     h = h.replace(/```(\w*)\n([\s\S]*?)```/g, (m, lang, code) => {
         const l = esc(lang || 'code');
         return `<div class="cb"><div class="cb-h"><span class="cb-l">${l}</span><button class="cb-c" onclick="copyCode(this)" title="Copy"><i class="fas fa-copy"></i></button></div><pre><code class="language-${l}">${code.replace(/\n$/, '')}</code></pre></div>`;
     });
     h = h.replace(/`([^`]+)`/g, '<code>$1</code>');
+    // headings
+    h = h.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
+    h = h.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+    h = h.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+    h = h.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+    // bold / italic
     h = h.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
     h = h.replace(/\*(.+?)\*/g, '<em>$1</em>');
+    // bare URLs not already inside an <a> tag
+    h = h.replace(/(?<!href="|src="|=")https?:\/\/[^\s<>"']+/g, url => {
+        let label;
+        try {
+            const u = new URL(url);
+            const seg = u.pathname.replace(/\/$/, '').split('/').filter(Boolean).pop();
+            label = seg ? decodeURIComponent(seg).replace(/[-_]/g, ' ') : u.hostname.replace(/^www\./, '');
+        } catch { label = url; }
+        return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="md-link" data-url="${url}">${label} <i class="fas fa-external-link-alt" style="font-size:9px;opacity:.6"></i></a>`;
+    });
+    // horizontal rule
+    h = h.replace(/^---+$/gm, '<hr class="md-hr">');
+    // blockquote
+    h = h.replace(/(^&gt;.+\n?)+/gm, block => {
+        const inner = block.replace(/^&gt;\s?/gm, '').trim();
+        return `<blockquote class="md-bq">${inner}</blockquote>`;
+    });
+    // tables
+    h = h.replace(/^(\|.+\|\n)(\|[-| :]+\|\n)((?:\|.+\|\n?)*)/gm, (_, head, sep, body) => {
+        const parseRow = row => row.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+        const aligns = parseRow(sep).map(c => {
+            if (/^:-+:$/.test(c)) return 'center';
+            if (/^-+:$/.test(c))  return 'right';
+            return 'left';
+        });
+        const ths = parseRow(head).map((c, i) =>
+            `<th style="text-align:${aligns[i] || 'left'}">${c}</th>`).join('');
+        const trs = body.trim().split('\n').filter(Boolean).map(row =>
+            '<tr>' + parseRow(row).map((c, i) =>
+                `<td style="text-align:${aligns[i] || 'left'}">${c}</td>`).join('') + '</tr>').join('');
+        return `<div class="md-tbl-wrap"><table class="md-tbl"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table></div>`;
+    });
+    // lists
     h = h.replace(/^- (.+)$/gm, '<li>$1</li>');
     h = h.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
     h = h.replace(/^\d+\.\s(.+)$/gm, '<li>$1</li>');
-    h = h.split('\n\n').map(b => { if (/^<(pre|ul|ol|li|div class="cb")/.test(b)) return b; return '<p>' + b.replace(/\n/g, '<br>') + '</p>'; }).join('');
+    // paragraphs
+    h = h.split('\n\n').map(b => {
+        if (/^<(pre|ul|ol|li|div|h[1-4]|hr|blockquote|table)/.test(b.trim())) return b;
+        return '<p>' + b.replace(/\n/g, '<br>') + '</p>';
+    }).join('');
     return h;
 }
 function copyCode(btn) {
@@ -36,8 +88,8 @@ function fallbackCopy(text, done) {
     try { document.execCommand('copy'); } catch (e) { } ta.remove(); done();
 }
 function toast(msg) { const c = document.getElementById('toasts'), e = document.createElement('div'); e.className = 'tt tt-s'; e.textContent = msg; c.appendChild(e); setTimeout(() => e.remove(), 3200); }
-function save() { localStorage.setItem('bb_chats', JSON.stringify(chats)); localStorage.setItem('bb_profile', JSON.stringify(profile)); }
-function load() { const d = localStorage.getItem('bb_chats'); chats = d ? JSON.parse(d) : []; const p = localStorage.getItem('bb_profile'); if (p) profile = JSON.parse(p); }
+function save() {}
+function load() {}
 
 /* ===== THEME ===== */
 function setTheme(t) {
@@ -127,19 +179,20 @@ function renderSB() {
 
 /* ===== CHAT ===== */
 function selChat(id) {
-    if (!profile.email || profile.email === 'user@botbase.io') {
-        chats = chats.filter(c => c.id === id); save();
-    }
     activeId = id;
     const c = chats.find(x => x.id === id); if (!c) return;
     document.getElementById('tbT').textContent = c.title;
+    document.getElementById('rnBtn').style.display = 'flex';
+    document.getElementById('dlBtn').style.display = 'flex';
     renderMsgs(c); renderSB();
     if (innerWidth <= 768) document.getElementById('sb').classList.remove('open');
 }
 function showWelcome() {
     activeId = null;
-    document.getElementById('tbT').textContent = 'New Chat';
-    document.getElementById('msIn').innerHTML = `<div class="wc"><div class="wc-ic"><i class="fas fa-robot"></i></div><h2>How can I help you?</h2><p>Ask me anything about your uploaded documents — company policies, API docs, onboarding, troubleshooting, and more.</p><div class="wc-g"><div class="wc-c" onclick="useS('What is the remote work policy?')"><div class="wc-c-t">Remote Work Policy</div><div class="wc-c-d">Rules for working from home</div></div><div class="wc-c" onclick="useS('How do I authenticate with the API?')"><div class="wc-c-t">API Authentication</div><div class="wc-c-d">Getting started with the API</div></div><div class="wc-c" onclick="useS('What happens on my first day?')"><div class="wc-c-t">First Day Guide</div><div class="wc-c-d">New employee onboarding steps</div></div><div class="wc-c" onclick="useS('How do I fix a 500 error on checkout?')"><div class="wc-c-t">Troubleshoot Errors</div><div class="wc-c-d">Debug common checkout issues</div></div></div></div>`;
+    document.getElementById('tbT').textContent = '✨ New Chat';
+    document.getElementById('rnBtn').style.display = 'none';
+    document.getElementById('dlBtn').style.display = 'none';
+    document.getElementById('msIn').innerHTML = `<div class="wc"><div class="wc-ic"><i class="fas fa-robot"></i></div><h2>⚡ How can I help you?</h2><p>Ask me anything — I'll search the web, find places, news, videos & more in real time. 🌐</p><div class="wc-g"><div class="wc-c" onclick="useS('What is the latest news today?')"><div class="wc-c-t">📰 Latest News</div><div class="wc-c-d">Real-time news from the web</div></div><div class="wc-c" onclick="useS('Tell me about the Alpha movie 2026')"><div class="wc-c-t">🎬 Movies & Shows</div><div class="wc-c-d">Info, cast, reviews & trailers</div></div><div class="wc-c" onclick="useS('Best restaurants near me')"><div class="wc-c-t">📍 Places & Maps</div><div class="wc-c-d">Locations, ratings & directions</div></div><div class="wc-c" onclick="useS('Write a Python function to sort a list')"><div class="wc-c-t">💻 Code & Tech</div><div class="wc-c-d">Write, debug & explain code</div></div></div></div>`;
     renderSB();
 }
 function useS(t) { const i = document.getElementById('cIn'); i.value = t; aH(i); document.getElementById('sBtn').disabled = false; send(); }
@@ -154,7 +207,7 @@ function renderMsgs(c) {
         wrap.style.marginBottom = mb;
         if (msg.role === 'user') {
             const avatar = `<div class="mg-a u">${ini(profile.name)}</div>`;
-            const header = `<div class="mg-h">${avatar}<span class="mg-n">${esc(profile.name)}</span><span class="mg-t">${ft(msg.time)}</span></div>`;
+            const header = `<div class="mg-h">${avatar}<span class="mg-n">👤 ${esc(profile.name)}</span><span class="mg-t">🕐 ${ft(msg.time)}</span></div>`;
             let fileChipsHtml = '';
             if (msg.files && msg.files.length) {
                 fileChipsHtml = '<div class="mg-files">' + msg.files.map(f => {
@@ -164,12 +217,12 @@ function renderMsgs(c) {
                     return `<span class="ia-file-chip" style="pointer-events:none">${icon}<span>${esc(name)}</span></span>`;
                 }).join('') + '</div>';
             }
-            wrap.innerHTML = header + `<div class="mg-b">${fileChipsHtml}<p>${esc(msg.text || '')}</p></div>`;
+            wrap.innerHTML = header + `<div class="mg-b mg-b-user">${fileChipsHtml}<p>${esc(msg.text || '')}</p></div>`;
         } else {
-            const header = `<div class="mg-h"><div class="mg-a b"><i class="fas fa-robot" style="font-size:10px"></i></div><span class="mg-n">ViperAI</span><span class="mg-t">${ft(msg.time)}</span></div>`;
+            const header = `<div class="mg-h"><div class="mg-a b">🤖</div><span class="mg-n">⚡ ViperAI</span><span class="mg-badge">AI</span><span class="mg-t">🕐 ${ft(msg.time)}</span></div>`;
             wrap.innerHTML = header;
             const body = document.createElement('div');
-            body.className = 'mg-b';
+            body.className = 'mg-b mg-b-bot';
             body.innerHTML = rt(msg.text || '');
             wrap.appendChild(body);
         }
@@ -213,7 +266,7 @@ function send() {
     const filesToSend = [...attachedFiles];
     attachedFiles = []; renderFilePreview();
     const filesMeta = filesToSend.map(f => ({ name: f.name, type: f.type }));
-    chat.messages.push({ role: 'user', text: txt, time: new Date().toISOString(), files: filesMeta }); save();
+    chat.messages.push({ role: 'user', text: txt, time: new Date().toISOString(), files: filesMeta });
     inp.value = ''; inp.style.height = 'auto'; document.getElementById('sBtn').disabled = true;
     renderMsgs(chat); renderSB(); updateProfileStats();
     gen = true;
@@ -227,24 +280,25 @@ function send() {
         fd.append('message', txt);
         fd.append('chat_id', chat.serverChatId || '');
         fd.append('title', chat.title);
-        fd.append('user_email', profile.email);
-        fd.append('user_name', profile.name);
         filesToSend.forEach(f => fd.append('files', f));
         fetchOpts = { method: 'POST', body: fd };
     } else {
         fetchOpts = {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: txt, chat_id: chat.serverChatId || null, title: chat.title, user_email: profile.email, user_name: profile.name })
+            body: JSON.stringify({ message: txt, chat_id: chat.serverChatId || null, title: chat.title })
         };
     }
     fetch('/chat', fetchOpts)
-        .then(r => r.json())
+        .then(r => {
+            if (!r.ok) return r.text().then(t => { throw new Error(t || r.statusText); });
+            return r.json();
+        })
         .then(d => {
-            const resp = d.answer || 'Sorry, no answer was returned.';
-            if (d.chat_id && !chat.serverChatId) { chat.serverChatId = d.chat_id; save(); }
+            const resp = d.answer || d.error || 'Sorry, no answer was returned.';
+            if (d.chat_id && !chat.serverChatId) { chat.serverChatId = d.chat_id; }
             chat.messages.push({ role: 'bot', text: resp, time: new Date().toISOString() });
-            save(); gen = false; renderMsgs(chat); updateProfileStats();
+            gen = false; renderMsgs(chat); updateProfileStats();
             if (micTriggered) {
                 micTriggered = false;
                 if (voiceMode) {
@@ -252,19 +306,20 @@ function send() {
                 }
             }
         })
-        .catch(() => {
-            chat.messages.push({ role: 'bot', text: 'Sorry, I could not reach the server. Please try again.', time: new Date().toISOString() });
-            save(); gen = false; renderMsgs(chat); updateProfileStats(); micTriggered = false;
+        .catch(err => {
+            const msg = err && err.message ? `Error: ${err.message}` : 'Something went wrong. Please try again.';
+            chat.messages.push({ role: 'bot', text: msg, time: new Date().toISOString() });
+            gen = false; renderMsgs(chat); updateProfileStats(); micTriggered = false;
         });
 }
 
 /* ===== NEW / RENAME / DELETE ===== */
 function newChat() {
-    if (!profile.email || profile.email === 'user@botbase.io') { chats = []; save(); }
     showWelcome(); document.getElementById('cIn').focus();
     if (innerWidth <= 768) document.getElementById('sb').classList.remove('open');
 }
-function saveRn() { if (!rnId) return; const c = chats.find(x => x.id === rnId), v = document.getElementById('rnIn').value.trim(); if (c && v) { c.title = v; save(); document.getElementById('tbT').textContent = v; renderSB(); toast('Chat renamed'); } closeMo('rnMo'); }
+function openRn() { if (!activeId) return; rnId = activeId; const c = chats.find(x => x.id === activeId); document.getElementById('rnIn').value = c ? c.title : ''; document.getElementById('rnMo').classList.add('on'); setTimeout(() => document.getElementById('rnIn').select(), 50); }
+function saveRn() { if (!rnId) return; const c = chats.find(x => x.id === rnId), v = document.getElementById('rnIn').value.trim(); if (c && v) { c.title = v; document.getElementById('tbT').textContent = v; renderSB(); toast('Chat renamed'); } closeMo('rnMo'); }
 document.getElementById('rnIn').addEventListener('keydown', e => { if (e.key === 'Enter') saveRn(); if (e.key === 'Escape') closeMo('rnMo'); });
 function openDlId(id) { delId = id; document.getElementById('dlTitle').textContent = 'Delete Chat'; document.getElementById('dlText').textContent = 'This conversation will be permanently deleted.'; document.getElementById('dlConfirm').textContent = 'Delete'; document.getElementById('dlConfirm').onclick = doDel; document.getElementById('dlMo').classList.add('on'); }
 function doDel() {
@@ -273,7 +328,7 @@ function doDel() {
     const id = delId;
     closeMo('dlMo');
     if (c && c.serverChatId) {
-        fetch('/api/chats/' + c.serverChatId, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_email: profile.email }) })
+        fetch('/api/chats/' + c.serverChatId, { method: 'DELETE' })
             .then(r => r.json())
             .then(d => {
                 if (d.ok) { _removeChat(id); toast('Chat deleted'); }
@@ -285,7 +340,7 @@ function doDel() {
     }
 }
 function _removeChat(id) {
-    chats = chats.filter(x => x.id !== id); save();
+    chats = chats.filter(x => x.id !== id);
     if (activeId === id) { if (chats.length) selChat(chats[0].id); else showWelcome(); }
     renderSB(); updateProfileStats();
 }
@@ -298,10 +353,10 @@ function clearAll() {
     document.getElementById('dlConfirm').textContent = 'Clear All';
     document.getElementById('dlConfirm').onclick = function () {
         closeMo('dlMo');
-        fetch('/api/chats', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_email: profile.email }) })
+        fetch('/api/chats', { method: 'DELETE' })
             .then(r => r.json())
             .then(d => {
-                if (d.ok) { chats = []; activeId = null; save(); showWelcome(); renderSB(); updateProfileStats(); closeSettings(); toast('All chats cleared'); }
+                if (d.ok) { chats = []; activeId = null; showWelcome(); renderSB(); updateProfileStats(); closeSettings(); toast('All chats cleared'); }
                 else toast('Clear failed: ' + (d.error || 'unknown error'));
             })
             .catch(() => toast('Clear failed'));
@@ -455,13 +510,7 @@ window.addEventListener('appinstalled', () => { document.getElementById('install
     });
 }());
 
-/* ===== GUEST CLEANUP ON LEAVE ===== */
-window.addEventListener('pagehide', () => {
-    if (!profile.email || profile.email === 'user@botbase.io') {
-        localStorage.removeItem('bb_chats');
-        localStorage.removeItem('bb_profile');
-    }
-});
+
 
 /* ===== INIT ===== */
 setTheme(localStorage.getItem('bb_theme') || 'dark');
@@ -473,7 +522,6 @@ fetch('/api/auth/me')
     .then(r => r.json())
     .then(u => {
         if (u.logged_in) {
-            load();
             profile.name = u.name;
             profile.email = u.email;
             document.getElementById('pfName').textContent = u.name;
@@ -483,10 +531,7 @@ fetch('/api/auth/me')
             document.getElementById('sbProfile').style.display = 'block';
             document.getElementById('setLogoutBtn').style.display = 'flex';
             document.getElementById('setLogoutDivider').style.display = 'block';
-            if (chats.length) { selChat(chats[0].id); updateProfileStats(); renderSB(); }
-            const safeEmail = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/.test(u.email) ? u.email : '';
-            if (!safeEmail) return;
-            fetch('/api/chats?email=' + encodeURIComponent(safeEmail))
+            fetch('/api/chats')
                 .then(r => r.json())
                 .then(data => {
                     if (data.chats && data.chats.length) {
@@ -497,7 +542,6 @@ fetch('/api/auth/me')
                             createdAt: c.createdAt,
                             messages: c.messages
                         }));
-                        save();
                         selChat(chats[0].id);
                         updateProfileStats();
                         renderSB();
@@ -506,8 +550,6 @@ fetch('/api/auth/me')
         } else {
             chats = []; activeId = null;
             profile = { name: 'User', email: 'user@botbase.io' };
-            localStorage.removeItem('bb_chats');
-            localStorage.removeItem('bb_profile');
             document.getElementById('sbAuth').style.display = 'block';
             document.getElementById('sbProfile').style.display = 'none';
             showWelcome(); renderSB(); updateProfileStats();
@@ -541,11 +583,5 @@ fetch('/api/auth/me')
 function doLogout() {
     fetch('/api/auth/logout', { method: 'POST' })
         .then(r => r.json())
-        .then(d => {
-            chats = []; activeId = null;
-            profile = { name: 'User', email: 'user@botbase.io' };
-            localStorage.removeItem('bb_chats');
-            localStorage.removeItem('bb_profile');
-            window.location.href = d.redirect;
-        });
+        .then(d => { window.location.href = d.redirect; });
 }

@@ -1,269 +1,686 @@
-from flask import Blueprint, request, jsonify, session
-from threading import Thread
-import base64
-import json
-from services.llm_service import ask_llm, extract_memories
-from services.vector_service import save_embedding, sync_all_embeddings
-from routes.memory import update_user_memories
+from flask import Blueprint, jsonify, request, session
+
 from connect import db_connection
-
-chat_bp = Blueprint("chat", __name__)
-
-
-def _extract_file_contents(files):
-    """Read uploaded files and return list of dicts for ask_llm."""
-    result = []
-    for f in files:
-        mime = f.content_type or ""
-        raw = f.read()
-        if mime.startswith("image/"):
-            result.append({
-                "type": "image",
-                "name": f.filename,
-                "mime": mime,
-                "data": base64.b64encode(raw).decode()
-            })
-        else:
-            # Try to decode as text (txt, csv, md, code files)
-            try:
-                text = raw.decode("utf-8", errors="replace")
-            except Exception:
-                text = raw.decode("latin-1", errors="replace")
-            result.append({
-                "type": "text",
-                "name": f.filename,
-                "data": text[:12000]  # cap at 12k chars to stay within token limits
-            })
-    return result
+from services.llm_service import chat as llm_chat
+from services.memory_worker import start_memory_worker
 
 
+chat_bp = Blueprint(
+    "chat_bp",
+    __name__
+)
 
-def _parse_msg(role, message, created_at):
-    entry = {'role': role, 'time': created_at.isoformat() + '+00:00'}
-    if role == 'user' and message.startswith('{'):
+
+# ==================================================
+# AUTH CHECK
+# ==================================================
+
+def _require_login():
+
+    if "user_id" not in session:
+
+        return jsonify({
+            "error": "Unauthorized"
+        }), 401
+
+    return None
+
+
+# ==================================================
+# GET ALL CHATS
+# GET /api/chats
+# ==================================================
+
+@chat_bp.route(
+    "/api/chats",
+    methods=["GET"]
+)
+def get_chats():
+
+    err = _require_login()
+
+    if err:
+        return err
+
+
+    conn = db_connection()
+
+    if not conn:
+
+        return jsonify({
+            "error": "DB error"
+        }), 500
+
+
+    try:
+
+        with conn.cursor() as cur:
+
+            # --------------------------------------
+            # Fetch user's chats
+            # --------------------------------------
+
+            cur.execute(
+                """
+                SELECT
+                    id,
+                    title,
+                    created_at
+
+                FROM chats
+
+                WHERE user_email = %s
+
+                ORDER BY updated_at DESC
+                """,
+                (
+                    session["user_email"],
+                )
+            )
+
+            rows = cur.fetchall()
+
+            chats = []
+
+
+            # --------------------------------------
+            # Fetch messages for every chat
+            # --------------------------------------
+
+            for row in rows:
+
+                cur.execute(
+                    """
+                    SELECT
+                        role,
+                        message,
+                        created_at
+
+                    FROM chat_messages
+
+                    WHERE chat_id = %s
+
+                    ORDER BY id ASC
+                    """,
+                    (
+                        row["id"],
+                    )
+                )
+
+
+                messages = [
+
+                    {
+                        "role": m["role"],
+
+                        "text": m["message"],
+
+                        "time": (
+                            m["created_at"]
+                            .isoformat()
+                        )
+                    }
+
+                    for m in cur.fetchall()
+                ]
+
+
+                chats.append({
+
+                    "id":
+                        row["id"],
+
+                    "title":
+                        row["title"],
+
+                    "createdAt":
+                        row["created_at"]
+                        .isoformat(),
+
+                    "messages":
+                        messages
+                })
+
+
+        return jsonify({
+            "chats": chats
+        }), 200
+
+
+    except Exception as e:
+
+        print(
+            f"[Get Chats Error] {e}"
+        )
+
+        return jsonify({
+            "error": "Failed to fetch chats"
+        }), 500
+
+
+    finally:
+
+        conn.close()
+
+
+# ==================================================
+# DELETE ONE CHAT
+# DELETE /api/chats/<id>
+# ==================================================
+
+@chat_bp.route(
+    "/api/chats/<int:chat_id>",
+    methods=["DELETE"]
+)
+def delete_chat(chat_id):
+
+    err = _require_login()
+
+    if err:
+        return err
+
+
+    conn = db_connection()
+
+    if not conn:
+
+        return jsonify({
+            "error": "DB error"
+        }), 500
+
+
+    try:
+
+        with conn.cursor() as cur:
+
+            cur.execute(
+                """
+                DELETE FROM chats
+
+                WHERE id = %s
+                AND user_email = %s
+                """,
+                (
+                    chat_id,
+                    session["user_email"]
+                )
+            )
+
+
+        conn.commit()
+
+
+        return jsonify({
+            "ok": True
+        }), 200
+
+
+    except Exception as e:
+
+        conn.rollback()
+
+        print(
+            f"[Delete Chat Error] {e}"
+        )
+
+        return jsonify({
+            "error": "Failed to delete chat"
+        }), 500
+
+
+    finally:
+
+        conn.close()
+
+
+# ==================================================
+# DELETE ALL CHATS
+# DELETE /api/chats
+# ==================================================
+
+@chat_bp.route(
+    "/api/chats",
+    methods=["DELETE"]
+)
+def delete_all_chats():
+
+    err = _require_login()
+
+    if err:
+        return err
+
+
+    conn = db_connection()
+
+    if not conn:
+
+        return jsonify({
+            "error": "DB error"
+        }), 500
+
+
+    try:
+
+        with conn.cursor() as cur:
+
+            cur.execute(
+                """
+                DELETE FROM chats
+
+                WHERE user_email = %s
+                """,
+                (
+                    session["user_email"],
+                )
+            )
+
+
+        conn.commit()
+
+
+        return jsonify({
+            "ok": True
+        }), 200
+
+
+    except Exception as e:
+
+        conn.rollback()
+
+        print(
+            f"[Delete All Chats Error] {e}"
+        )
+
+        return jsonify({
+            "error": "Failed to delete chats"
+        }), 500
+
+
+    finally:
+
+        conn.close()
+
+
+# ==================================================
+# MAIN CHAT API
+# POST /chat
+# ==================================================
+
+@chat_bp.route(
+    "/chat",
+    methods=["POST"]
+)
+def chat():
+
+    # ==================================================
+    # 1. CHECK LOGIN
+    # ==================================================
+
+    err = _require_login()
+
+    if err:
+        return err
+
+
+    user_email = session["user_email"]
+
+
+    # ==================================================
+    # 2. GET REQUEST DATA
+    # ==================================================
+
+    if (
+        request.content_type
+        and request.content_type.startswith(
+            "multipart/form-data"
+        )
+    ):
+
+        message = (
+            request.form.get("message")
+            or ""
+        ).strip()
+
+        chat_id = (
+            request.form.get("chat_id")
+            or None
+        )
+
+        title = (
+            request.form.get("title")
+            or message[:80]
+        )
+
+    else:
+
+        data = (
+            request.get_json(
+                silent=True
+            )
+            or {}
+        )
+
+        message = (
+            data.get("message")
+            or ""
+        ).strip()
+
+        chat_id = (
+            data.get("chat_id")
+            or None
+        )
+
+        title = (
+            data.get("title")
+            or message[:80]
+        )
+
+
+    # ==================================================
+    # 3. VALIDATE MESSAGE
+    # ==================================================
+
+    if not message:
+
+        return jsonify({
+            "error": "Message is required"
+        }), 400
+
+
+    # ==================================================
+    # 4. CONNECT DATABASE
+    # ==================================================
+
+    conn = db_connection()
+
+    if not conn:
+
+        return jsonify({
+            "error": "DB error"
+        }), 500
+
+
+    try:
+
+        with conn.cursor() as cur:
+
+
+            # ==================================================
+            # 5. VERIFY EXISTING CHAT
+            # ==================================================
+
+            if chat_id:
+
+                cur.execute(
+                    """
+                    SELECT id
+
+                    FROM chats
+
+                    WHERE id = %s
+                    AND user_email = %s
+                    """,
+                    (
+                        chat_id,
+                        user_email
+                    )
+                )
+
+
+                # Chat doesn't belong to user
+                # Create a new chat instead
+
+                if not cur.fetchone():
+
+                    chat_id = None
+
+
+            # ==================================================
+            # 6. CREATE NEW CHAT
+            # ==================================================
+
+            if not chat_id:
+
+                cur.execute(
+                    """
+                    INSERT INTO chats
+                    (
+                        user_email,
+                        user_name,
+                        title
+                    )
+
+                    VALUES (%s, %s, %s)
+                    """,
+                    (
+                        user_email,
+
+                        session.get(
+                            "user_name",
+                            ""
+                        ),
+
+                        title
+                    )
+                )
+
+
+                chat_id = (
+                    cur.lastrowid
+                )
+
+
+            # ==================================================
+            # 7. UPDATE EXISTING CHAT
+            # ==================================================
+
+            else:
+
+                cur.execute(
+                    """
+                    UPDATE chats
+
+                    SET
+                        updated_at =
+                        CURRENT_TIMESTAMP
+
+                    WHERE id = %s
+                    """,
+                    (
+                        chat_id,
+                    )
+                )
+
+
+            # ==================================================
+            # 8. FETCH PREVIOUS 6 MESSAGES
+            #
+            # IMPORTANT:
+            # Fetch history BEFORE inserting current message.
+            #
+            # This prevents current query appearing twice:
+            #
+            # Current Query: What is Python?
+            #
+            # History:
+            # USER: What is Python?
+            # ==================================================
+
+            cur.execute(
+                """
+                SELECT
+                    role,
+                    message
+
+                FROM chat_messages
+
+                WHERE chat_id = %s
+
+                ORDER BY id DESC
+
+                LIMIT 6
+                """,
+                (
+                    chat_id,
+                )
+            )
+
+
+            # SQL returns:
+            # newest -> oldest
+            #
+            # LLM needs:
+            # oldest -> newest
+
+            history = list(
+                reversed(
+                    cur.fetchall()
+                )
+            )
+
+
+            # ==================================================
+            # 9. SAVE CURRENT USER MESSAGE
+            # ==================================================
+
+            cur.execute(
+                """
+                INSERT INTO chat_messages
+                (
+                    chat_id,
+                    role,
+                    message
+                )
+
+                VALUES
+                (
+                    %s,
+                    'user',
+                    %s
+                )
+                """,
+                (
+                    chat_id,
+                    message
+                )
+            )
+
+
+        # Commit user message before LLM call
+
+        conn.commit()
+
+
+        # ==================================================
+        # 10. CALL LLM SERVICE
+        #
+        # Argument 1 = Current user query
+        # Argument 2 = User email for long-term memory
+        # Argument 3 = Last 6 messages for short-term memory
+        # ==================================================
+
+        answer = llm_chat(
+            message,
+            user_email,
+            history
+        )
+
+
+        # ==================================================
+        # 11. SAVE AI RESPONSE
+        # ==================================================
+
+        with conn.cursor() as cur:
+
+            cur.execute(
+                """
+                INSERT INTO chat_messages
+                (
+                    chat_id,
+                    role,
+                    message
+                )
+
+                VALUES
+                (
+                    %s,
+                    'bot',
+                    %s
+                )
+                """,
+                (
+                    chat_id,
+                    answer
+                )
+            )
+
+
+            # Update chat activity timestamp
+
+            cur.execute(
+                """
+                UPDATE chats
+
+                SET
+                    updated_at =
+                    CURRENT_TIMESTAMP
+
+                WHERE id = %s
+                """,
+                (
+                    chat_id,
+                )
+            )
+
+
+        conn.commit()
+
+
+        # ==================================================
+        # 12. TRIGGER MEMORY PIPELINE (background)
+        # ==================================================
+
+        start_memory_worker(user_email, chat_id)
+
+
+        # ==================================================
+        # 13. RETURN ANSWER
+        # ==================================================
+
+        return jsonify({
+
+            "answer":
+                answer,
+
+            "chat_id":
+                chat_id
+
+        }), 200
+
+
+    except Exception as e:
+
+        # ==================================================
+        # ERROR HANDLING
+        # ==================================================
+
         try:
-            p = json.loads(message)
-            entry['text'] = p.get('text', message)
-            entry['files'] = p.get('files', [])
-            return entry
+            conn.rollback()
+
         except Exception:
             pass
-    entry['text'] = message
-    return entry
 
 
-def _fetch_context(user_email, chat_id):
-    """Fetch user memories and last 28 messages for context."""
-    conn = db_connection()
-    if not conn:
-        return [], []
-    try:
-        with conn.cursor() as cur:
-            # memories
-            cur.execute(
-                "SELECT id, category, title, content FROM user_memories WHERE user_email = %s ORDER BY category",
-                (user_email,)
-            )
-            memories = cur.fetchall()
+        print(
+            f"[Chat API Error] {e}"
+        )
 
-            # last 28 messages across all user chats (most recent first, then reverse)
-            if chat_id:
-                cur.execute(
-                    """SELECT role, message FROM chat_messages
-                       WHERE chat_id = %s ORDER BY created_at DESC LIMIT 28""",
-                    (chat_id,)
-                )
-            else:
-                cur.execute(
-                    """SELECT cm.role, cm.message FROM chat_messages cm
-                       JOIN chats c ON c.id = cm.chat_id
-                       WHERE c.user_email = %s ORDER BY cm.created_at DESC LIMIT 28""",
-                    (user_email,)
-                )
-            history = list(reversed(cur.fetchall()))
-        # normalize to plain dicts so they're safe across threads
-        memories = [dict(m) for m in memories]
-        history  = [dict(h) for h in history]
-        return memories, history
-    except Exception as e:
-        print(f"Context fetch error: {e}")
-        return [], []
+
+        return jsonify({
+            "error": "Something went wrong"
+        }), 500
+
+
     finally:
-        conn.close()
 
-
-def _extract_and_save_memories(user_email, history, existing_memories):
-    memories = extract_memories(history, existing_memories)
-    if memories:
-        update_user_memories(user_email, memories)
-
-
-def _save_to_db(user_email, user_name, chat_id, title, question, answer, result_box, history, memories):
-    conn = db_connection()
-    if not conn:
-        return
-    try:
-        with conn.cursor() as cur:
-            if not chat_id:
-                cur.execute(
-                    "INSERT INTO chats (user_email, user_name, title) VALUES (%s, %s, %s)",
-                    (user_email, user_name, title)
-                )
-                chat_id = cur.lastrowid
-                result_box.append(chat_id)
-            cur.execute(
-                "INSERT INTO chat_messages (chat_id, role, message) VALUES (%s, 'user', %s)",
-                (chat_id, question)
-            )
-            user_msg_id = cur.lastrowid
-            cur.execute(
-                "INSERT INTO chat_messages (chat_id, role, message) VALUES (%s, 'bot', %s)",
-                (chat_id, answer)
-            )
-            bot_msg_id = cur.lastrowid
-        conn.commit()
-        Thread(target=save_embedding, args=(user_msg_id, chat_id, 'user', question), daemon=True).start()
-        Thread(target=save_embedding, args=(bot_msg_id,  chat_id, 'bot',  answer),   daemon=True).start()
-        full_history = history + [
-            {"role": "user", "message": question},
-            {"role": "bot",  "message": answer}
-        ]
-        Thread(target=_extract_and_save_memories, args=(user_email, full_history, memories), daemon=True).start()
-    except Exception as e:
-        print(f"DB save error: {e}")
-    finally:
-        conn.close()
-
-
-@chat_bp.route("/chat", methods=["POST"])
-def chat():
-    # Support both JSON (no files) and multipart/form-data (with files)
-    if request.content_type and "multipart/form-data" in request.content_type:
-        question  = (request.form.get("message") or "").strip()
-        chat_id   = request.form.get("chat_id") or None
-        title     = request.form.get("title") or question[:60]
-        body_email = (request.form.get("user_email") or "").strip().lower()
-        body_name  = (request.form.get("user_name") or "").strip()
-        files      = request.files.getlist("files")
-        file_contents = _extract_file_contents(files) if files else []
-        file_names = [f.filename for f in files] if files else []
-    else:
-        data       = request.get_json()
-        question   = (data.get("message") or "").strip()
-        chat_id    = data.get("chat_id")
-        title      = data.get("title") or question[:60]
-        body_email = (data.get("user_email") or "").strip().lower()
-        body_name  = (data.get("user_name") or "").strip()
-        file_contents = []
-        file_names = []
-
-    if not question:
-        return jsonify({"error": "Empty message"}), 400
-
-    session_email = session.get("user_email")
-    user_email    = session_email or body_email
-    user_name     = session.get("user_name") or body_name
-
-    memories, history = _fetch_context(user_email, chat_id)
-    answer = ask_llm(question, file_contents if file_contents else None, memories, history)
-
-    stored_question = (json.dumps({'files': file_names, 'text': question}) if file_names else question)
-
-    result_box = []
-    _save_to_db(
-        user_email, user_name, chat_id, title,
-        stored_question, answer, result_box, history, memories
-    )
-
-    if not chat_id and result_box:
-        chat_id = result_box[0]
-
-    return jsonify({"answer": answer, "chat_id": chat_id})
-
-
-@chat_bp.route("/api/vector/sync", methods=["POST"])
-def vector_sync():
-    if session.get("user_role") != "admin":
-        return jsonify({"error": "Unauthorized"}), 401
-    count = sync_all_embeddings()
-    return jsonify({"ok": True, "synced": count})
-
-
-@chat_bp.route("/api/chats/<int:chat_id>", methods=["DELETE"])
-def delete_chat(chat_id):
-    user_email = session.get("user_email") or request.args.get("email", "").strip().lower()
-    if not user_email:
-        return jsonify({"error": "Unauthorized"}), 401
-    conn = db_connection()
-    if not conn:
-        return jsonify({"error": "DB error"}), 500
-    try:
-        with conn.cursor() as cur:
-            cur.execute("DELETE FROM chats WHERE id = %s AND user_email = %s", (chat_id, user_email))
-            deleted = cur.rowcount
-        conn.commit()
-        return jsonify({"ok": deleted > 0})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        conn.close()
-
-
-@chat_bp.route("/api/chats", methods=["DELETE"])
-def delete_all_chats():
-    user_email = session.get("user_email") or request.args.get("email", "").strip().lower()
-    if not user_email:
-        return jsonify({"error": "Unauthorized"}), 401
-    conn = db_connection()
-    if not conn:
-        return jsonify({"error": "DB error"}), 500
-    try:
-        with conn.cursor() as cur:
-            cur.execute("DELETE FROM chats WHERE user_email = %s", (user_email,))
-        conn.commit()
-        return jsonify({"ok": True})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        conn.close()
-
-
-@chat_bp.route("/api/chats")
-def get_user_chats():
-    user_email = session.get("user_email") or request.args.get("email", "").strip().lower()
-    if not user_email:
-        return jsonify({"chats": []})
-
-    conn = db_connection()
-    if not conn:
-        return jsonify({"chats": []})
-
-    try:
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT id, title, created_at FROM chats WHERE user_email = %s ORDER BY created_at DESC",
-                (user_email,)
-            )
-            chats = cur.fetchall()
-
-            result = []
-            for c in chats:
-                cur.execute(
-                    "SELECT role, message, created_at FROM chat_messages WHERE chat_id = %s ORDER BY created_at ASC",
-                    (c["id"],)
-                )
-                messages = cur.fetchall()
-                result.append({
-                    "id": c["id"],
-                    "title": c["title"],
-                    "createdAt": c["created_at"].isoformat() + '+00:00',
-                    "messages": [
-                        _parse_msg(m["role"], m["message"], m["created_at"])
-                        for m in messages
-                    ]
-                })
-        return jsonify({"chats": result})
-    except Exception as e:
-        return jsonify({"chats": [], "error": str(e)})
-    finally:
         conn.close()

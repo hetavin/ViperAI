@@ -27,6 +27,7 @@ def db_connection(timeout=6):
         future = _executor.submit(_connect)
         return future.result(timeout=timeout)
     except TimeoutError:
+        future.cancel()
         print("Database connection timed out")
         return None
     except Exception as e:

@@ -7,4 +7,5 @@ python-dotenv
 sentence-transformers
 torch
 transformers
-gunicorn>=20.1.0
+# Optional / production
+# gunicorn>=20.1.0

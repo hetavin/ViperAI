@@ -93,52 +93,61 @@ function switchPage(pageId) {
 }
 
 function updateDashboard() {
-  fetch('/api/admin/stats').then(r => r.json()).then(data => {
-    document.getElementById('statUsers').textContent   = data.users    || 0;
-    document.getElementById('statMessages').textContent = data.messages || 0;
-    document.getElementById('statPdfs').textContent    = pdfs.length;
-  });
+  fetch('/api/admin/dashboard').then(r => r.json()).then(data => {
+    if (data.error) return;
 
-  const recentDiv = document.getElementById('recentUploads');
-  if (pdfs.length === 0) {
-    recentDiv.innerHTML = `<div class="empty-state" style="height:180px;"><i class="fas fa-cloud-arrow-up"></i><span style="font-size:13px;">No PDFs uploaded yet</span></div>`;
-  } else {
-    recentDiv.innerHTML = pdfs.slice(-4).reverse().map(p => `
-      <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg-elevated);border-radius:10px;">
-        <div style="width:32px;height:32px;background:rgba(224,85,85,0.12);color:var(--danger);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;">
-          <i class="fas fa-file-pdf"></i>
-        </div>
-        <div style="flex:1;min-width:0;">
-          <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.name}</div>
-          <div style="font-size:11px;color:var(--fg-muted);">${formatSize(p.size)} · ${formatDate(p.uploadedAt)}</div>
-        </div>
-        <span class="badge badge-success" style="font-size:10px;"><i class="fas fa-check"></i> Ready</span>
-      </div>
-    `).join('');
-  }
+    // Stat cards
+    const s = data.stats || {};
+    document.getElementById('statUsers').textContent    = s.users    ?? 0;
+    document.getElementById('statChats').textContent    = s.chats    ?? 0;
+    document.getElementById('statMessages').textContent = s.messages ?? 0;
+    document.getElementById('statMemories').textContent = s.memories ?? 0;
 
-  fetch('/api/admin/users').then(r => r.json()).then(data => {
+    // Recent conversations
     const chatsDiv = document.getElementById('recentChats');
-    const users = (data.users || []).filter(u => u.chat_count > 0).slice(0, 4);
-    if (users.length === 0) {
-      chatsDiv.innerHTML = `<div class="empty-state" style="height:180px;"><i class="fas fa-comments"></i><span style="font-size:13px;">No chat activity yet</span></div>`;
+    const rc = data.recent_chats || [];
+    document.getElementById('recentChatsCount').innerHTML = rc.length ? `<i class="fas fa-comments"></i> ${rc.length} recent` : '';
+    if (!rc.length) {
+      chatsDiv.innerHTML = `<div class="empty-state" style="min-height:140px;"><i class="fas fa-comments"></i><span style="font-size:13px;">No conversations yet</span></div>`;
     } else {
-      chatsDiv.innerHTML = users.map(u => {
-        const name = u.name || u.email;
-        const color = getAvatarColor(name);
+      chatsDiv.innerHTML = rc.map(c => {
+        const color = getAvatarColor(c.user_name);
         return `
-          <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg-elevated);border-radius:10px;">
-            <div style="width:32px;height:32px;background:${color.bg};color:${color.fg};border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;font-family:'Space Grotesk';">${getInitials(name)}</div>
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg-elevated);border-radius:10px;cursor:pointer;transition:background .15s;" onmouseover="this.style.background='var(--accent-dim)'" onmouseout="this.style.background='var(--bg-elevated)'" onclick="switchPage('chats')">
+            <div style="width:34px;height:34px;background:${color.bg};color:${color.fg};border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;font-family:'Space Grotesk';">${getInitials(c.user_name)}</div>
             <div style="flex:1;min-width:0;">
-              <div style="font-size:13px;font-weight:500;">${esc(name)}</div>
-              <div style="font-size:11px;color:var(--fg-muted);">${u.message_count} messages</div>
+              <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(c.title)}</div>
+              <div style="font-size:11px;color:var(--fg-muted);margin-top:1px;">${esc(c.user_name)} &middot; ${c.msg_count} msgs</div>
             </div>
-            <span style="font-size:11px;color:var(--fg-muted);white-space:nowrap;">${formatDate(u.created_at)}</span>
-          </div>
-        `;
+            <div style="font-size:11px;color:var(--fg-muted);white-space:nowrap;flex-shrink:0;">${formatDate(c.updated_at)}</div>
+          </div>`;
       }).join('');
     }
-  });
+
+    // Most active users
+    const usersDiv = document.getElementById('topUsers');
+    const tu = data.top_users || [];
+    document.getElementById('topUsersCount').innerHTML = tu.length ? `<i class="fas fa-users"></i> ${tu.length} users` : '';
+    if (!tu.length) {
+      usersDiv.innerHTML = `<div class="empty-state" style="min-height:140px;"><i class="fas fa-users"></i><span style="font-size:13px;">No users yet</span></div>`;
+    } else {
+      usersDiv.innerHTML = tu.map((u, i) => {
+        const color = getAvatarColor(u.name);
+        const rankColors = ['#e09f3e','#b0b0b0','#cd7f32'];
+        const rank = i < 3 ? `<span style="font-size:11px;font-weight:700;color:${rankColors[i]};width:18px;text-align:center;flex-shrink:0;">#${i+1}</span>` : `<span style="font-size:11px;color:var(--fg-muted);width:18px;text-align:center;flex-shrink:0;">${i+1}</span>`;
+        return `
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg-elevated);border-radius:10px;">
+            ${rank}
+            <div style="width:32px;height:32px;background:${color.bg};color:${color.fg};border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;font-family:'Space Grotesk';">${getInitials(u.name)}</div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(u.name)}</div>
+              <div style="font-size:11px;color:var(--fg-muted);">${u.chat_count} chats &middot; ${u.message_count} msgs</div>
+            </div>
+            <div style="font-size:11px;color:var(--fg-muted);white-space:nowrap;flex-shrink:0;">${formatDate(u.created_at)}</div>
+          </div>`;
+      }).join('');
+    }
+  }).catch(() => {});
 }
 
 const uploadZone = document.getElementById('uploadZone');
@@ -591,3 +600,16 @@ function renderViperChatMessages(messages) {
 }
 
 updateDashboard();
+
+// Load admin profile into sidebar footer
+fetch('/api/admin/me').then(r => r.json()).then(data => {
+  if (data.name)  document.getElementById('adminName').textContent  = data.name;
+  if (data.email) document.getElementById('adminEmail').textContent = data.email;
+  if (data.name) {
+    const av = document.getElementById('adminAv');
+    const color = getAvatarColor(data.name);
+    av.style.background = color.bg;
+    av.style.color = color.fg;
+    av.innerHTML = getInitials(data.name);
+  }
+}).catch(() => {});

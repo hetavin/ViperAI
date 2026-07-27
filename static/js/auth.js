@@ -53,8 +53,21 @@ $(document).ready(function () {
 
     // ── Form navigation ───────────────────────────────────────────────────────
 
-    $("#loginForm .auth-link").last().click(function (e) { e.preventDefault(); showForm("registerForm"); });
-    $("#registerForm .auth-link").click(function (e) { e.preventDefault(); showForm("loginForm"); });
+    function showFormNav(id) {
+        showForm(id);
+        const url = new URL(window.location);
+        if (id === 'registerForm') url.searchParams.set('mode', 'register');
+        else url.searchParams.delete('mode');
+        history.replaceState(null, '', url);
+    }
+
+    // Show register form if mode=register (set by server via data attribute)
+    if ($('#authScreen').data('mode') === 'register') {
+        showForm('registerForm');
+    }
+
+    $("#loginForm .auth-link").last().click(function (e) { e.preventDefault(); showFormNav("registerForm"); });
+    $("#registerForm .auth-link").click(function (e) { e.preventDefault(); showFormNav("loginForm"); });
     $("#loginForm .auth-link").first().click(function (e) { e.preventDefault(); showForm("forgotEmailForm"); });
     $("#forgotEmailForm .auth-back").click(function (e) { e.preventDefault(); showForm("loginForm"); });
     $("#forgotOtpForm .auth-back").click(function (e) { e.preventDefault(); showForm("forgotEmailForm"); });
@@ -146,7 +159,7 @@ $(document).ready(function () {
                 toast(res.message);
                 $('#rName, #rEmail, #rPass, #rPassC').val('');
                 $('#rAgree').prop('checked', false);
-                setTimeout(() => showForm('loginForm'), 1500);
+                setTimeout(() => showFormNav('loginForm'), 1500);
             },
 
             error: function (xhr) {
