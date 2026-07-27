@@ -16,11 +16,8 @@ _load_env()
 # =====================================================
 
 memory_llm = ChatGroq(
-    model=os.environ.get(
-        "GROQ_MODEL",
-        "meta-llama/llama-4-scout-17b-16e-instruct"
-    ),
-    api_key=os.environ.get("GROQ_API_KEY", ""),
+    model=os.environ["GROQ_MODEL"],
+    api_key=os.environ["GROQ_API_KEY"],
     temperature=0
 )
 
