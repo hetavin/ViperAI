@@ -71,10 +71,10 @@
     </nav>
 
     <div class="sidebar-footer">
-      <div class="sidebar-footer-av"><i class="fas fa-user"></i></div>
+      <div class="sidebar-footer-av" id="adminAv"><i class="fas fa-user"></i></div>
       <div class="sidebar-footer-info">
-        <div class="sidebar-footer-name">Admin</div>
-        <div class="sidebar-footer-email">admin@viperai.io</div>
+        <div class="sidebar-footer-name" id="adminName">Admin</div>
+        <div class="sidebar-footer-email" id="adminEmail">—</div>
       </div>
     </div>
   </aside>
@@ -101,17 +101,6 @@
         </div>
 
         <div class="stats-grid">
-          <div class="stat-card amber">
-            <div class="stat-card-header">
-              <span class="stat-card-label">Total PDFs</span>
-              <div class="stat-card-icon" style="background:var(--accent-dim);">
-                <i class="fas fa-file-pdf" style="color:var(--accent);"></i>
-              </div>
-            </div>
-            <div class="stat-card-value" id="statPdfs">0</div>
-            <div class="stat-card-sub" style="color:var(--success);"><i class="fas fa-arrow-up" style="font-size:10px;"></i> Knowledge base</div>
-          </div>
-
           <div class="stat-card green">
             <div class="stat-card-header">
               <span class="stat-card-label">Total Users</span>
@@ -119,8 +108,19 @@
                 <i class="fas fa-users" style="color:var(--success);"></i>
               </div>
             </div>
-            <div class="stat-card-value" id="statUsers">0</div>
-            <div class="stat-card-sub" style="color:var(--success);"><i class="fas fa-arrow-up" style="font-size:10px;"></i> Active chatters</div>
+            <div class="stat-card-value" id="statUsers">—</div>
+            <div class="stat-card-sub" style="color:var(--success);"><i class="fas fa-user-check" style="font-size:10px;"></i> Registered accounts</div>
+          </div>
+
+          <div class="stat-card amber">
+            <div class="stat-card-header">
+              <span class="stat-card-label">Total Chats</span>
+              <div class="stat-card-icon" style="background:var(--accent-dim);">
+                <i class="fas fa-comments" style="color:var(--accent);"></i>
+              </div>
+            </div>
+            <div class="stat-card-value" id="statChats">—</div>
+            <div class="stat-card-sub" style="color:var(--accent);"><i class="fas fa-comment-dots" style="font-size:10px;"></i> Conversations started</div>
           </div>
 
           <div class="stat-card blue">
@@ -130,42 +130,39 @@
                 <i class="fas fa-message" style="color:var(--info);"></i>
               </div>
             </div>
-            <div class="stat-card-value" id="statMessages">0</div>
-            <div class="stat-card-sub" style="color:var(--info);"><i class="fas fa-arrow-up" style="font-size:10px;"></i> All conversations</div>
+            <div class="stat-card-value" id="statMessages">—</div>
+            <div class="stat-card-sub" style="color:var(--info);"><i class="fas fa-envelope" style="font-size:10px;"></i> User + bot messages</div>
           </div>
 
           <div class="stat-card red">
             <div class="stat-card-header">
-              <span class="stat-card-label">Bot Status</span>
-              <div class="stat-card-icon" style="background:rgba(62,201,122,0.12);">
-                <i class="fas fa-bolt" style="color:var(--success);"></i>
+              <span class="stat-card-label">Memories Stored</span>
+              <div class="stat-card-icon" style="background:rgba(168,85,224,0.12);">
+                <i class="fas fa-brain" style="color:#a855e0;"></i>
               </div>
             </div>
-            <div style="display:flex;align-items:center;gap:10px;">
-              <div class="stat-card-value">Live</div>
-              <div class="pulse-dot"></div>
-            </div>
-            <div class="stat-card-sub" style="color:var(--success);"><i class="fas fa-circle-check" style="font-size:10px;"></i> Running normally</div>
+            <div class="stat-card-value" id="statMemories">—</div>
+            <div class="stat-card-sub" style="color:#a855e0;"><i class="fas fa-database" style="font-size:10px;"></i> User memory entries</div>
           </div>
         </div>
 
         <div class="recent-grid">
           <div class="recent-card">
-            <h3>Recent Uploads</h3>
-            <div id="recentUploads" style="display:flex;flex-direction:column;gap:10px;">
-              <div class="empty-state" style="min-height:160px;">
-                <i class="fas fa-cloud-arrow-up"></i>
-                <span style="font-size:13px;">No PDFs uploaded yet</span>
-              </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+              <h3 style="margin:0;">Recent Conversations</h3>
+              <span class="badge badge-info" id="recentChatsCount"></span>
+            </div>
+            <div id="recentChats" style="display:flex;flex-direction:column;gap:8px;">
+              <div class="empty-state" style="min-height:160px;"><i class="fas fa-comments"></i><span style="font-size:13px;">No chat activity yet</span></div>
             </div>
           </div>
           <div class="recent-card">
-            <h3>Recent Chats</h3>
-            <div id="recentChats" style="display:flex;flex-direction:column;gap:10px;">
-              <div class="empty-state" style="min-height:160px;">
-                <i class="fas fa-comments"></i>
-                <span style="font-size:13px;">No chat activity yet</span>
-              </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+              <h3 style="margin:0;">Most Active Users</h3>
+              <span class="badge badge-success" id="topUsersCount"></span>
+            </div>
+            <div id="topUsers" style="display:flex;flex-direction:column;gap:8px;">
+              <div class="empty-state" style="min-height:160px;"><i class="fas fa-users"></i><span style="font-size:13px;">No users yet</span></div>
             </div>
           </div>
         </div>

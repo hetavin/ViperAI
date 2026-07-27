@@ -1317,6 +1317,58 @@ h4 {
 .mg-b ul li::marker { color: var(--accent); }
 .mg-b ol li::marker { color: var(--cyan); }
 
+/* Blockquote */
+.mg-b .md-bq {
+  border-left: 3px solid var(--accent);
+  background: var(--accent-d);
+  margin: 8px 0;
+  padding: 10px 14px;
+  border-radius: 0 8px 8px 0;
+  color: var(--fg2);
+  font-style: italic;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* Table */
+.mg-b .md-tbl-wrap {
+  overflow-x: auto;
+  margin: 10px 0;
+  border-radius: 10px;
+  border: 1px solid var(--bdr2);
+}
+.mg-b .md-tbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+.mg-b .md-tbl thead tr {
+  background: var(--bg-el);
+  border-bottom: 2px solid var(--accent);
+}
+.mg-b .md-tbl th {
+  padding: 10px 14px;
+  font-weight: 700;
+  font-family: 'Space Grotesk', sans-serif;
+  color: var(--accent);
+  white-space: nowrap;
+  font-size: 12.5px;
+  letter-spacing: .3px;
+}
+.mg-b .md-tbl td {
+  padding: 9px 14px;
+  color: var(--fg2);
+  border-bottom: 1px solid var(--bdr);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.mg-b .md-tbl tbody tr:last-child td {
+  border-bottom: none;
+}
+.mg-b .md-tbl tbody tr:hover {
+  background: var(--hover);
+}
+
 /* Typing */
 .ty {
   padding-left: 34px;

@@ -45,13 +45,33 @@ function rt(t) {
     });
     // horizontal rule
     h = h.replace(/^---+$/gm, '<hr class="md-hr">');
+    // blockquote
+    h = h.replace(/(^&gt;.+\n?)+/gm, block => {
+        const inner = block.replace(/^&gt;\s?/gm, '').trim();
+        return `<blockquote class="md-bq">${inner}</blockquote>`;
+    });
+    // tables
+    h = h.replace(/^(\|.+\|\n)(\|[-| :]+\|\n)((?:\|.+\|\n?)*)/gm, (_, head, sep, body) => {
+        const parseRow = row => row.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+        const aligns = parseRow(sep).map(c => {
+            if (/^:-+:$/.test(c)) return 'center';
+            if (/^-+:$/.test(c))  return 'right';
+            return 'left';
+        });
+        const ths = parseRow(head).map((c, i) =>
+            `<th style="text-align:${aligns[i] || 'left'}">${c}</th>`).join('');
+        const trs = body.trim().split('\n').filter(Boolean).map(row =>
+            '<tr>' + parseRow(row).map((c, i) =>
+                `<td style="text-align:${aligns[i] || 'left'}">${c}</td>`).join('') + '</tr>').join('');
+        return `<div class="md-tbl-wrap"><table class="md-tbl"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table></div>`;
+    });
     // lists
     h = h.replace(/^- (.+)$/gm, '<li>$1</li>');
     h = h.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
     h = h.replace(/^\d+\.\s(.+)$/gm, '<li>$1</li>');
     // paragraphs
     h = h.split('\n\n').map(b => {
-        if (/^<(pre|ul|ol|li|div|h[1-4]|hr)/.test(b.trim())) return b;
+        if (/^<(pre|ul|ol|li|div|h[1-4]|hr|blockquote|table)/.test(b.trim())) return b;
         return '<p>' + b.replace(/\n/g, '<br>') + '</p>';
     }).join('');
     return h;
@@ -162,12 +182,16 @@ function selChat(id) {
     activeId = id;
     const c = chats.find(x => x.id === id); if (!c) return;
     document.getElementById('tbT').textContent = c.title;
+    document.getElementById('rnBtn').style.display = 'flex';
+    document.getElementById('dlBtn').style.display = 'flex';
     renderMsgs(c); renderSB();
     if (innerWidth <= 768) document.getElementById('sb').classList.remove('open');
 }
 function showWelcome() {
     activeId = null;
     document.getElementById('tbT').textContent = '✨ New Chat';
+    document.getElementById('rnBtn').style.display = 'none';
+    document.getElementById('dlBtn').style.display = 'none';
     document.getElementById('msIn').innerHTML = `<div class="wc"><div class="wc-ic"><i class="fas fa-robot"></i></div><h2>⚡ How can I help you?</h2><p>Ask me anything — I'll search the web, find places, news, videos & more in real time. 🌐</p><div class="wc-g"><div class="wc-c" onclick="useS('What is the latest news today?')"><div class="wc-c-t">📰 Latest News</div><div class="wc-c-d">Real-time news from the web</div></div><div class="wc-c" onclick="useS('Tell me about the Alpha movie 2026')"><div class="wc-c-t">🎬 Movies & Shows</div><div class="wc-c-d">Info, cast, reviews & trailers</div></div><div class="wc-c" onclick="useS('Best restaurants near me')"><div class="wc-c-t">📍 Places & Maps</div><div class="wc-c-d">Locations, ratings & directions</div></div><div class="wc-c" onclick="useS('Write a Python function to sort a list')"><div class="wc-c-t">💻 Code & Tech</div><div class="wc-c-d">Write, debug & explain code</div></div></div></div>`;
     renderSB();
 }
@@ -294,6 +318,7 @@ function newChat() {
     showWelcome(); document.getElementById('cIn').focus();
     if (innerWidth <= 768) document.getElementById('sb').classList.remove('open');
 }
+function openRn() { if (!activeId) return; rnId = activeId; const c = chats.find(x => x.id === activeId); document.getElementById('rnIn').value = c ? c.title : ''; document.getElementById('rnMo').classList.add('on'); setTimeout(() => document.getElementById('rnIn').select(), 50); }
 function saveRn() { if (!rnId) return; const c = chats.find(x => x.id === rnId), v = document.getElementById('rnIn').value.trim(); if (c && v) { c.title = v; document.getElementById('tbT').textContent = v; renderSB(); toast('Chat renamed'); } closeMo('rnMo'); }
 document.getElementById('rnIn').addEventListener('keydown', e => { if (e.key === 'Enter') saveRn(); if (e.key === 'Escape') closeMo('rnMo'); });
 function openDlId(id) { delId = id; document.getElementById('dlTitle').textContent = 'Delete Chat'; document.getElementById('dlText').textContent = 'This conversation will be permanently deleted.'; document.getElementById('dlConfirm').textContent = 'Delete'; document.getElementById('dlConfirm').onclick = doDel; document.getElementById('dlMo').classList.add('on'); }

@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, render_template, request, session, redirect, url_for, current_app
+from flask import Blueprint, jsonify, request, session, redirect, url_for, current_app
 from connect import db_connection
 
 auth_bp = Blueprint('auth', __name__)
@@ -34,14 +34,7 @@ def me():
 @auth_bp.route("/api/auth/logout", methods=["POST"])
 def logout():
     session.clear()
-    return jsonify({"redirect": "/"}), 200
-
-
-@auth_bp.route("/login")
-def login_page():
-    if "user_id" in session:
-        return redirect("/admin/dashboard" if session.get("user_role") == "admin" else "/")
-    return render_template("auth.html")
+    return jsonify({"redirect": "/login"}), 200
 
 
 @auth_bp.route("/api/auth/register", methods=["POST"])
@@ -110,10 +103,10 @@ def login_api():
             return jsonify({"error": "Incorrect password"}), 401
 
         session.permanent    = True
-        session["user_id"]    = user["id"]
-        session["user_name"]  = user["name"]
+        session["user_id"]   = user["id"]
+        session["user_name"] = user["name"]
         session["user_email"] = email
-        session["user_role"]  = user["role"]
+        session["user_role"] = user["role"]
         first = user["name"].split()[0].capitalize()
         redirect_url = "/admin/dashboard" if user["role"] == "admin" else "/"
         return jsonify({"message": f"Welcome back, {first}!", "redirect": redirect_url}), 200
@@ -158,10 +151,10 @@ def google_callback():
                 user = cursor.fetchone()
 
         session.permanent    = True
-        session["user_id"]    = user["id"]
-        session["user_name"]  = user["name"]
+        session["user_id"]   = user["id"]
+        session["user_name"] = user["name"]
         session["user_email"] = email
-        session["user_role"]  = user["role"]
+        session["user_role"] = user["role"]
         return redirect("/admin/dashboard" if user["role"] == "admin" else "/")
     finally:
         conn.close()
