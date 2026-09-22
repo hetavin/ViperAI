@@ -86,7 +86,10 @@ function rt(t) {
     // 3. Extract markdown links
     const links = [];
     t = t.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, label, url) => {
-        links.push(`<a href="${url}" target="_blank" rel="noopener noreferrer" class="md-link" data-url="${url}">${esc(label)} <i class="fas fa-external-link-alt" style="font-size:9px;opacity:.6"></i></a>`);
+        const href = safeUrl(url);
+        // Rejected target: fall through as plain text, escaped in step 4.
+        if (!href) return label;
+        links.push(`<a href="${escAttr(href)}" target="_blank" rel="noopener noreferrer" class="md-link" data-url="${escAttr(href)}">${esc(label)} <i class="fas fa-external-link-alt" style="font-size:9px;opacity:.6"></i></a>`);
         return `\x00LINK${links.length - 1}\x00`;
     });
 
