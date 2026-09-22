@@ -22,12 +22,30 @@ def _connect():
     )
 
 
+def _close_orphaned(future):
+    """
+    A timed-out connect() keeps running in the worker thread. Close whatever
+    it eventually hands back so the socket is not leaked.
+    """
+    try:
+        conn = future.result()
+    except Exception:
+        return
+
+    try:
+        conn.close()
+    except Exception:
+        pass
+
+
 def db_connection(timeout=6):
+    future = None
     try:
         future = _executor.submit(_connect)
         return future.result(timeout=timeout)
     except TimeoutError:
-        future.cancel()
+        if future is not None and not future.cancel():
+            future.add_done_callback(_close_orphaned)
         print("Database connection timed out")
         return None
     except Exception as e:

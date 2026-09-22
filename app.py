@@ -7,8 +7,24 @@ import os
 _load_env()
 
 app = Flask(__name__)
-app.secret_key = os.getenv("SECRET_KEY", "viper-secret-key")
+
+# Fail loudly rather than falling back to a publicly-known key — a guessable
+# secret means anyone can forge a session cookie.
+_secret_key = os.getenv("SECRET_KEY")
+if not _secret_key:
+    raise RuntimeError(
+        "SECRET_KEY is not set. Add it to .env or the environment before starting ViperAI."
+    )
+
+app.secret_key = _secret_key
 app.permanent_session_lifetime = timedelta(days=30)
+
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=os.getenv("COOKIE_SECURE", "0") == "1",
+    MAX_CONTENT_LENGTH=16 * 1024 * 1024,
+)
 
 # ── Google OAuth ──────────────────────────────────────────────────────────────
 oauth = OAuth(app)
@@ -33,4 +49,6 @@ app.register_blueprint(chat_bp)
 app.register_blueprint(admin_bp)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    # The Werkzeug debugger is remote code execution — opt in explicitly,
+    # never by default.
+    app.run(debug=os.getenv("FLASK_DEBUG", "0") == "1")

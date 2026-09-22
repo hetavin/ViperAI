@@ -1,7 +1,11 @@
 from flask import Blueprint, jsonify, request, session, redirect, url_for, current_app
+from werkzeug.security import generate_password_hash, check_password_hash
 from connect import db_connection
 
 auth_bp = Blueprint('auth', __name__)
+
+# Placeholder stored for accounts that can only sign in through Google.
+GOOGLE_ONLY = "__google__"
 
 
 def _ensure_users_table(conn):
@@ -9,14 +13,58 @@ def _ensure_users_table(conn):
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id INT AUTO_INCREMENT PRIMARY KEY,
-                name VARCHAR(255) NOT NULL,
+                name VARCHAR(255) NULL,
                 email VARCHAR(255) UNIQUE NOT NULL,
                 password VARCHAR(255) NOT NULL,
                 role ENUM('admin', 'user') NOT NULL DEFAULT 'user',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
             )
         """)
     conn.commit()
+
+
+def _first_name(name, fallback="there"):
+    """
+    Greeting name. `name` is nullable in the schema and may be blank, so never
+    index into the split() result directly.
+    """
+    parts = (name or "").split()
+    return parts[0].capitalize() if parts else fallback
+
+
+def _upgrade_password(conn, user_id, password):
+    """Replace a legacy plaintext password with a hash, in place."""
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "UPDATE users SET password = %s WHERE id = %s",
+                (generate_password_hash(password), user_id)
+            )
+        conn.commit()
+    except Exception as e:
+        print(f"[Auth] Password upgrade failed for user {user_id}: {e}")
+
+
+def _verify_password(conn, user, password):
+    stored = user.get("password") or ""
+
+    if stored == GOOGLE_ONLY:
+        return False
+
+    try:
+        if check_password_hash(stored, password):
+            return True
+    except Exception:
+        pass
+
+    # Rows created before hashing was introduced hold the password verbatim.
+    # Accept them once, then upgrade so the plaintext does not survive a login.
+    if stored and stored == password:
+        _upgrade_password(conn, user["id"], password)
+        return True
+
+    return False
 
 
 @auth_bp.route("/api/auth/me")
@@ -39,7 +87,7 @@ def logout():
 
 @auth_bp.route("/api/auth/register", methods=["POST"])
 def register():
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     name     = (data.get("name") or "").strip()
     email    = (data.get("email") or "").strip().lower()
     password = data.get("password") or ""
@@ -69,18 +117,23 @@ def register():
                 return jsonify({"error": "An account with this email already exists"}), 409
             cursor.execute(
                 "INSERT INTO users (name, email, password) VALUES (%s, %s, %s)",
-                (name, email, password)
+                (name, email, generate_password_hash(password))
             )
         conn.commit()
-        first = name.split()[0].capitalize()
-        return jsonify({"message": f"Welcome, {first}! Account created successfully."}), 201
+        return jsonify({
+            "message": f"Welcome, {_first_name(name)}! Account created successfully."
+        }), 201
+    except Exception as e:
+        conn.rollback()
+        print(f"[Auth] Register error: {e}")
+        return jsonify({"error": "Registration failed"}), 500
     finally:
         conn.close()
 
 
 @auth_bp.route("/api/auth/login", methods=["POST"])
 def login_api():
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     email    = (data.get("email") or "").strip().lower()
     password = data.get("password") or ""
 
@@ -93,23 +146,36 @@ def login_api():
 
     try:
         with conn.cursor() as cursor:
-            cursor.execute("SELECT id, name, password, role FROM users WHERE email = %s", (email,))
+            cursor.execute(
+                "SELECT id, name, password, role FROM users WHERE email = %s",
+                (email,)
+            )
             user = cursor.fetchone()
 
         if not user:
-            return jsonify({"error": "No account found. Please register first.", "show_register": True}), 404
+            return jsonify({
+                "error": "No account found. Please register first.",
+                "show_register": True
+            }), 404
 
-        if password != user["password"]:
+        if not _verify_password(conn, user, password):
             return jsonify({"error": "Incorrect password"}), 401
 
-        session.permanent    = True
-        session["user_id"]   = user["id"]
-        session["user_name"] = user["name"]
+        session.permanent     = True
+        session["user_id"]    = user["id"]
+        session["user_name"]  = user["name"] or email
         session["user_email"] = email
-        session["user_role"] = user["role"]
-        first = user["name"].split()[0].capitalize()
+        session["user_role"]  = user["role"]
+
+        greeting = _first_name(user["name"])
         redirect_url = "/admin/dashboard" if user["role"] == "admin" else "/"
-        return jsonify({"message": f"Welcome back, {first}!", "redirect": redirect_url}), 200
+        return jsonify({
+            "message": f"Welcome back, {greeting}!",
+            "redirect": redirect_url
+        }), 200
+    except Exception as e:
+        print(f"[Auth] Login error: {e}")
+        return jsonify({"error": "Login failed"}), 500
     finally:
         conn.close()
 
@@ -124,13 +190,19 @@ def google_login():
 @auth_bp.route("/api/auth/google/callback")
 def google_callback():
     oauth = current_app.extensions['oauth']
-    token = oauth.google.authorize_access_token()
-    user_info = token.get('userinfo')
-    if not user_info:
+
+    try:
+        token = oauth.google.authorize_access_token()
+    except Exception as e:
+        print(f"[Auth] Google token exchange failed: {e}")
         return redirect('/login?error=google_failed')
 
-    email = user_info['email'].lower()
-    name  = user_info.get('name', email.split('@')[0])
+    user_info = token.get('userinfo') or {}
+    email = (user_info.get('email') or "").strip().lower()
+    if not email:
+        return redirect('/login?error=google_failed')
+
+    name = user_info.get('name') or email.split('@')[0]
 
     conn = db_connection()
     if not conn:
@@ -141,20 +213,31 @@ def google_callback():
         with conn.cursor() as cursor:
             cursor.execute("SELECT id, name, role FROM users WHERE email = %s", (email,))
             user = cursor.fetchone()
+
             if not user:
                 cursor.execute(
-                    "INSERT INTO users (name, email, password) VALUES (%s, %s, %s)",
-                    (name, email, '__google__')
+                    "INSERT IGNORE INTO users (name, email, password) VALUES (%s, %s, %s)",
+                    (name, email, GOOGLE_ONLY)
                 )
                 conn.commit()
+                # Re-read rather than trusting lastrowid: a concurrent callback
+                # for the same address may have won the INSERT.
                 cursor.execute("SELECT id, name, role FROM users WHERE email = %s", (email,))
                 user = cursor.fetchone()
 
-        session.permanent    = True
-        session["user_id"]   = user["id"]
-        session["user_name"] = user["name"]
+        if not user:
+            print(f"[Auth] Google sign-in could not resolve a user row for {email}")
+            return redirect('/login?error=google_failed')
+
+        session.permanent     = True
+        session["user_id"]    = user["id"]
+        session["user_name"]  = user["name"] or name
         session["user_email"] = email
-        session["user_role"] = user["role"]
+        session["user_role"]  = user["role"]
         return redirect("/admin/dashboard" if user["role"] == "admin" else "/")
+    except Exception as e:
+        conn.rollback()
+        print(f"[Auth] Google callback error: {e}")
+        return redirect('/login?error=google_failed')
     finally:
         conn.close()

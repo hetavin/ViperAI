@@ -178,6 +178,52 @@ VALID_TYPES = {
 
 
 # ==================================================
+# 5b. LLM FAILURE REPORTING
+# ==================================================
+
+class LLMUnavailable(RuntimeError):
+    """
+    The model could not be reached. Carries a message that says what to fix,
+    instead of collapsing into a generic 500.
+    """
+
+
+def _as_llm_error(exc: Exception) -> "LLMUnavailable":
+
+    text = str(exc)
+    status = getattr(exc, "status_code", None) or getattr(
+        getattr(exc, "response", None), "status_code", None
+    )
+
+    if status == 401 or "invalid_api_key" in text or "Invalid API Key" in text:
+        return LLMUnavailable(
+            "Groq rejected the API key. Check GROQ_API_KEY in .env, "
+            "then fully stop and restart the server."
+        )
+
+    if status == 429 or "rate_limit" in text:
+        return LLMUnavailable(
+            "Groq rate limit reached. Please try again in a moment."
+        )
+
+    if status == 404 or "model_not_found" in text or "does not exist" in text:
+        return LLMUnavailable(
+            f"The model '{os.environ.get('GROQ_MODEL')}' is not available for "
+            "this account. Check GROQ_MODEL in .env."
+        )
+
+    return LLMUnavailable("The AI service is unavailable right now.")
+
+
+def _is_auth_error(exc: Exception) -> bool:
+    text = str(exc)
+    status = getattr(exc, "status_code", None) or getattr(
+        getattr(exc, "response", None), "status_code", None
+    )
+    return status == 401 or "invalid_api_key" in text or "Invalid API Key" in text
+
+
+# ==================================================
 # 6. MAIN CHAT FUNCTION
 # ==================================================
 
@@ -200,6 +246,12 @@ def chat(
 
     except Exception as e:
         print(f"[Classifier Error] {e}")
+
+        # A rejected key or a missing model will fail the answer call too —
+        # report it here instead of burning a second request on it.
+        if _is_auth_error(e):
+            raise _as_llm_error(e) from e
+
         query_type = "GENERAL"
 
     print(f"[ViperAI] Query Type: {query_type}")
@@ -210,9 +262,15 @@ def chat(
     web_results = web_tool.invoke({"query": query}) if need_web else "Not required."
     memories    = memory_tool.invoke({"user_email": user_email}) if need_memory else "No memories loaded for this query."
 
-    return answer_chain.invoke({
-        "query":                query,
-        "conversation_history": conversation_history,
-        "memories":             memories,
-        "web_results":          web_results
-    })
+    try:
+        return answer_chain.invoke({
+            "query":                query,
+            "query_type":           query_type,
+            "conversation_history": conversation_history,
+            "memories":             memories,
+            "web_results":          web_results
+        })
+
+    except Exception as e:
+        print(f"[Answer Error] {e}")
+        raise _as_llm_error(e) from e

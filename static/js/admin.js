@@ -44,12 +44,23 @@ function formatTime(iso) {
 
 function esc(t) {
   const d = document.createElement('div');
-  d.textContent = t;
+  d.textContent = t == null ? '' : t;
   return d.innerHTML;
 }
 
+// esc() leaves quotes alone, which is fine for text nodes but breaks out of an
+// HTML attribute. Anything interpolated into an attribute must use this.
+function escAttr(t) {
+  return String(t == null ? '' : t)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function getInitials(name) {
-  return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+  return String(name || '').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
 }
 
 function getAvatarColor(name) {
@@ -114,7 +125,7 @@ function updateDashboard() {
         const color = getAvatarColor(c.user_name);
         return `
           <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg-elevated);border-radius:10px;cursor:pointer;transition:background .15s;" onmouseover="this.style.background='var(--accent-dim)'" onmouseout="this.style.background='var(--bg-elevated)'" onclick="switchPage('chats')">
-            <div style="width:34px;height:34px;background:${color.bg};color:${color.fg};border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;font-family:'Space Grotesk';">${getInitials(c.user_name)}</div>
+            <div style="width:34px;height:34px;background:${color.bg};color:${color.fg};border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;font-family:'Space Grotesk';">${esc(getInitials(c.user_name))}</div>
             <div style="flex:1;min-width:0;">
               <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(c.title)}</div>
               <div style="font-size:11px;color:var(--fg-muted);margin-top:1px;">${esc(c.user_name)} &middot; ${c.msg_count} msgs</div>
@@ -138,7 +149,7 @@ function updateDashboard() {
         return `
           <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg-elevated);border-radius:10px;">
             ${rank}
-            <div style="width:32px;height:32px;background:${color.bg};color:${color.fg};border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;font-family:'Space Grotesk';">${getInitials(u.name)}</div>
+            <div style="width:32px;height:32px;background:${color.bg};color:${color.fg};border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;font-family:'Space Grotesk';">${esc(getInitials(u.name))}</div>
             <div style="flex:1;min-width:0;">
               <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(u.name)}</div>
               <div style="font-size:11px;color:var(--fg-muted);">${u.chat_count} chats &middot; ${u.message_count} msgs</div>
@@ -252,8 +263,8 @@ function renderPdfList() {
     <div class="pdf-item" id="pdf-${p.id}">
       <div class="pdf-icon"><i class="fas fa-file-pdf"></i></div>
       <div class="pdf-info">
-        <div class="pdf-name">${p.name}</div>
-        <div class="pdf-meta">${formatSize(p.size)} · ${p.pages} pages · ${formatDate(p.uploadedAt)}</div>
+        <div class="pdf-name">${esc(p.name)}</div>
+        <div class="pdf-meta">${esc(formatSize(p.size))} · ${esc(p.pages)} pages · ${esc(formatDate(p.uploadedAt))}</div>
       </div>
       <div class="pdf-actions">
         <span class="badge badge-success"><i class="fas fa-circle-check"></i> Processed</span>
@@ -295,23 +306,32 @@ function renderChatUserList() {
     list.innerHTML = `<div class="empty-state" style="height:300px;background:var(--bg-card);border:1px solid var(--border);border-radius:14px;"><i class="fas fa-user-group"></i><span style="font-size:13px;">${search ? 'No users match your search' : 'No user conversations found'}</span></div>`;
     return;
   }
+  // Names and emails are user-supplied, so they go in as data attributes and
+  // the handler is bound afterwards — never interpolated into an onclick.
   list.innerHTML = filtered.map(u => {
     const name = u.name || u.email;
     const color = getAvatarColor(name);
     return `
-      <div class="chat-user-item" onclick="selectChatUser('${u.email}', '${esc(name)}', '${getInitials(name)}', '${color.bg}', '${color.fg}')">
-        <div class="user-avatar" style="background:${color.bg};color:${color.fg};">${getInitials(name)}</div>
+      <div class="chat-user-item" data-email="${escAttr(u.email)}" data-name="${escAttr(name)}"
+           data-initials="${escAttr(getInitials(name))}" data-bg="${escAttr(color.bg)}" data-fg="${escAttr(color.fg)}">
+        <div class="user-avatar" style="background:${escAttr(color.bg)};color:${escAttr(color.fg)};">${esc(getInitials(name))}</div>
         <div style="flex:1;min-width:0;">
           <div style="font-size:14px;font-weight:600;">${esc(name)}</div>
-          <div style="font-size:12px;color:var(--fg-muted);">${u.email}</div>
+          <div style="font-size:12px;color:var(--fg-muted);">${esc(u.email)}</div>
         </div>
         <div style="text-align:right;flex-shrink:0;">
-          <div style="font-size:11px;color:var(--fg-muted);">${formatDate(u.created_at)}</div>
-          <div style="font-size:11px;color:var(--fg-muted);margin-top:4px;">${u.chat_count} chats</div>
+          <div style="font-size:11px;color:var(--fg-muted);">${esc(formatDate(u.created_at))}</div>
+          <div style="font-size:11px;color:var(--fg-muted);margin-top:4px;">${esc(u.chat_count)} chats</div>
         </div>
       </div>
     `;
   }).join('');
+
+  list.querySelectorAll('.chat-user-item').forEach(el => {
+    el.addEventListener('click', () => selectChatUser(
+      el.dataset.email, el.dataset.name, el.dataset.initials, el.dataset.bg, el.dataset.fg
+    ));
+  });
 }
 
 function filterChats() { renderChatUserList(); }
@@ -362,7 +382,7 @@ async function selectChatById(chatId, userEmail) {
         <div style="display:flex;flex-direction:column;align-items:${isUser ? 'flex-end' : 'flex-start'};">
           <div class="chat-bubble ${isUser ? 'bubble-user' : 'bubble-bot'}" style="animation-delay:${i * 0.05}s;">${isUser ? parseMsg(m.message) : esc(m.message)}</div>
           <div style="font-size:10px;color:var(--fg-muted);margin-top:4px;padding:0 4px;">
-            ${isUser ? (userEmail || 'User') : 'ViperAI'} · ${formatTime(m.created_at)}
+            ${esc(isUser ? (userEmail || 'User') : 'ViperAI')} · ${formatTime(m.created_at)}
           </div>
         </div>
       `;
@@ -487,17 +507,24 @@ function renderViperUserList() {
     const name  = u.name || u.email;
     const color = getAvatarColor(name);
     return `
-      <div class="chat-user-item" onclick="selectViperUser('${u.email}', '${esc(name)}', '${getInitials(name)}', '${color.bg}', '${color.fg}')">
-        <div class="user-avatar" style="background:${color.bg};color:${color.fg};">${getInitials(name)}</div>
+      <div class="chat-user-item" data-email="${escAttr(u.email)}" data-name="${escAttr(name)}"
+           data-initials="${escAttr(getInitials(name))}" data-bg="${escAttr(color.bg)}" data-fg="${escAttr(color.fg)}">
+        <div class="user-avatar" style="background:${escAttr(color.bg)};color:${escAttr(color.fg)};">${esc(getInitials(name))}</div>
         <div style="flex:1;min-width:0;">
           <div style="font-size:14px;font-weight:600;">${esc(name)}</div>
-          <div style="font-size:12px;color:var(--fg-muted);">${u.email}</div>
-          <div style="font-size:11px;color:var(--fg-muted);margin-top:2px;">${u.chat_count || 0} chats · ${u.message_count || 0} messages</div>
+          <div style="font-size:12px;color:var(--fg-muted);">${esc(u.email)}</div>
+          <div style="font-size:11px;color:var(--fg-muted);margin-top:2px;">${esc(u.chat_count || 0)} chats · ${esc(u.message_count || 0)} messages</div>
         </div>
-        <div style="font-size:11px;color:var(--fg-muted);white-space:nowrap;">${formatDate(u.created_at)}</div>
+        <div style="font-size:11px;color:var(--fg-muted);white-space:nowrap;">${esc(formatDate(u.created_at))}</div>
       </div>
     `;
   }).join('');
+
+  list.querySelectorAll('.chat-user-item').forEach(el => {
+    el.addEventListener('click', () => selectViperUser(
+      el.dataset.email, el.dataset.name, el.dataset.initials, el.dataset.bg, el.dataset.fg
+    ));
+  });
 }
 
 function filterViperUsers() { renderViperUserList(); }
@@ -590,7 +617,7 @@ function renderViperChatMessages(messages) {
           ${isUser ? parseMsg(m.message) : esc(m.message)}
         </div>
         <div style="font-size:10px;color:var(--fg-muted);margin-top:4px;padding:0 4px;">
-          ${isUser ? (selectedViperUser || 'User') : 'ViperAI'} · ${formatTime(m.created_at)}
+          ${esc(isUser ? (selectedViperUser || 'User') : 'ViperAI')} · ${formatTime(m.created_at)}
         </div>
       </div>
     `;

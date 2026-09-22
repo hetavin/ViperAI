@@ -1,7 +1,16 @@
 import os
 
 
-def _load_env(path=None):
+def _load_env(path=None, override=True):
+    """
+    Load .env into os.environ.
+
+    `override` defaults to True on purpose. With setdefault semantics an edit to
+    .env never reached a running server: the Werkzeug reloader restarts the
+    child process but it inherits the parent's os.environ, so the value read at
+    the very first start shadowed the file for the life of the parent — which
+    showed up as a stale API key long after .env had been corrected.
+    """
     if path is None:
         path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
     try:
@@ -11,7 +20,10 @@ def _load_env(path=None):
                 if not line or line.startswith("#") or "=" not in line:
                     continue
                 k, v = line.split("=", 1)
-                os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+                k = k.strip()
+                v = v.strip().strip('"').strip("'")
+                if override or k not in os.environ:
+                    os.environ[k] = v
     except FileNotFoundError:
         pass
 

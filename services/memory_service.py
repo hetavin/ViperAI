@@ -16,8 +16,11 @@ _load_env()
 # =====================================================
 
 memory_llm = ChatGroq(
-    model=os.environ.get("GROQ_MODEL"),
-    api_key=os.environ["GROQ_API_KEY"],
+    model=os.environ.get(
+        "GROQ_MODEL",
+        "meta-llama/llama-4-scout-17b-16e-instruct"
+    ),
+    api_key=os.environ.get("GROQ_API_KEY", ""),
     temperature=0
 )
 
@@ -76,7 +79,11 @@ finance
 relationships
 other
 
-Return JSON only.
+Return JSON only, in exactly this shape, with no prose and no code fences:
+
+{{"memories": [{{"category": "...", "title": "...", "content": "..."}}]}}
+
+If there is nothing worth remembering, return {{"memories": []}}.
 
 Conversation:
 
@@ -106,6 +113,11 @@ def fetch_recent_messages(chat_id: int, limit: int = 20):
     try:
 
         conn = db_connection()
+
+        if conn is None:
+            print("[Memory] Fetch Error: no database connection")
+            return []
+
         cursor = conn.cursor()
 
         cursor.execute(
@@ -121,7 +133,9 @@ def fetch_recent_messages(chat_id: int, limit: int = 20):
             (chat_id, limit)
         )
 
-        rows = cursor.fetchall()
+        # fetchall() hands back a tuple, which has no .reverse() — build a
+        # list before reversing.
+        rows = list(cursor.fetchall())
 
         # Oldest → Newest
         rows.reverse()
@@ -199,16 +213,40 @@ def extract_memories(conversation: str):
             }
         )
 
-        if isinstance(result, list):
-            return result
-
-        return []
+        return _coerce_memory_list(result)
 
     except Exception as e:
 
         print(f"[Memory] Extraction Error: {e}")
 
         return []
+
+
+def _coerce_memory_list(result):
+    """
+    The model is asked for {"memories": [...]} but happily returns a bare list,
+    a single object, or some other wrapper key. Accept all of those rather than
+    silently dropping the extraction.
+    """
+
+    if isinstance(result, list):
+        candidates = result
+
+    elif isinstance(result, dict):
+
+        if {"category", "title", "content"} & set(result):
+            candidates = [result]
+
+        else:
+            candidates = next(
+                (v for v in result.values() if isinstance(v, list)),
+                []
+            )
+
+    else:
+        return []
+
+    return [c for c in candidates if isinstance(c, dict)]
     
 # =====================================================
 # Save or Update Memory
@@ -221,23 +259,16 @@ def save_memory(user_email: str, memory: dict):
 
     try:
 
-        category = memory.get(
-            "category",
-            "other"
-        ).lower().strip()
-
-        title = memory.get(
-            "title",
-            ""
-        ).strip()
-
-        content = memory.get(
-            "content",
-            ""
-        ).strip()
+        # The model decides these values, so treat every one as untyped.
+        category = str(memory.get("category") or "other").lower().strip()
+        title = str(memory.get("title") or "").strip()
+        content = str(memory.get("content") or "").strip()
 
         if not title or not content:
             return False
+
+        # title is VARCHAR(255) — truncate instead of letting the INSERT fail.
+        title = title[:255]
 
         valid_categories = {
             "personal",
@@ -256,6 +287,11 @@ def save_memory(user_email: str, memory: dict):
         chash = content_hash(content)
 
         conn = db_connection()
+
+        if conn is None:
+            print("[Memory] Save Error : no database connection")
+            return False
+
         cursor = conn.cursor()
 
         cursor.execute(

@@ -1,7 +1,10 @@
+import json
+import os
+
 from flask import Blueprint, jsonify, request, session
 
 from connect import db_connection
-from services.llm_service import chat as llm_chat
+from services.llm_service import chat as llm_chat, LLMUnavailable
 from services.memory_worker import start_memory_worker
 
 
@@ -9,6 +12,18 @@ chat_bp = Blueprint(
     "chat_bp",
     __name__
 )
+
+
+# Attachment types whose contents can be handed to the model as text.
+_TEXT_SUFFIXES = {
+    ".txt", ".md", ".markdown", ".csv", ".tsv", ".json", ".log",
+    ".py", ".js", ".ts", ".jsx", ".tsx", ".html", ".css", ".sql",
+    ".yml", ".yaml", ".xml", ".ini", ".cfg", ".sh", ".java", ".c",
+    ".cpp", ".h", ".go", ".rb", ".php", ".rs"
+}
+
+_MAX_INLINE_CHARS = 4000
+_MAX_INLINE_FILES = 5
 
 
 # ==================================================
@@ -24,6 +39,97 @@ def _require_login():
         }), 401
 
     return None
+
+
+# ==================================================
+# MESSAGE STORAGE FORMAT
+#
+# A message with attachments is stored as JSON so the
+# file names survive into the history and the admin
+# view. Plain messages are stored verbatim.
+# ==================================================
+
+def _decode_message(raw):
+
+    if not raw or not raw.startswith("{"):
+        return raw or "", []
+
+    try:
+        payload = json.loads(raw)
+    except (ValueError, TypeError):
+        return raw, []
+
+    if not isinstance(payload, dict) or "text" not in payload:
+        return raw, []
+
+    files = payload.get("files")
+
+    if not isinstance(files, list):
+        files = []
+
+    return payload.get("text") or "", [str(f) for f in files]
+
+
+def _encode_message(text, file_names):
+
+    if not file_names:
+        return text
+
+    return json.dumps({
+        "text": text,
+        "files": file_names
+    })
+
+
+def _read_attachments(uploads):
+    """
+    Turn uploaded files into (names, prompt_section).
+
+    Text-like files are inlined up to a cap; anything else is named so the
+    model can say it cannot read it, rather than the upload being silently
+    discarded.
+    """
+
+    names = []
+    sections = []
+
+    for storage in uploads[:_MAX_INLINE_FILES]:
+
+        name = os.path.basename(
+            (storage.filename or "").strip()
+        )
+
+        if not name:
+            continue
+
+        names.append(name)
+
+        suffix = os.path.splitext(name)[1].lower()
+
+        if suffix not in _TEXT_SUFFIXES:
+            sections.append(
+                f"--- {name} (not a text file, contents unavailable) ---"
+            )
+            continue
+
+        try:
+            raw = storage.read(_MAX_INLINE_CHARS * 4)
+            body = raw.decode("utf-8", "replace")
+
+        except Exception as e:
+            print(f"[Chat API] Could not read attachment {name}: {e}")
+            sections.append(f"--- {name} (could not be read) ---")
+            continue
+
+        if len(body) > _MAX_INLINE_CHARS:
+            body = body[:_MAX_INLINE_CHARS] + "\n...[truncated]"
+
+        sections.append(f"--- {name} ---\n{body}")
+
+    if not names:
+        return [], ""
+
+    return names, "\n\nAttached files:\n\n" + "\n\n".join(sections)
 
 
 # ==================================================
@@ -80,53 +186,62 @@ def get_chats():
 
             rows = cur.fetchall()
 
-            chats = []
+            chat_ids = [row["id"] for row in rows]
 
 
             # --------------------------------------
-            # Fetch messages for every chat
+            # Fetch every chat's messages in ONE
+            # round trip, then group them by chat.
+            #
+            # Querying inside the loop above meant a
+            # query per chat on every page load.
             # --------------------------------------
 
-            for row in rows:
+            by_chat = {chat_id: [] for chat_id in chat_ids}
+
+            if chat_ids:
+
+                placeholders = ", ".join(["%s"] * len(chat_ids))
 
                 cur.execute(
-                    """
+                    f"""
                     SELECT
+                        chat_id,
                         role,
                         message,
                         created_at
 
                     FROM chat_messages
 
-                    WHERE chat_id = %s
+                    WHERE chat_id IN ({placeholders})
 
                     ORDER BY id ASC
                     """,
-                    (
-                        row["id"],
-                    )
+                    tuple(chat_ids)
                 )
 
+                for m in cur.fetchall():
 
-                messages = [
+                    text, files = _decode_message(m["message"])
 
-                    {
+                    by_chat[m["chat_id"]].append({
+
                         "role": m["role"],
 
-                        "text": m["message"],
+                        "text": text,
+
+                        "files": files,
 
                         "time": (
                             m["created_at"]
                             .isoformat()
                         )
-                    }
-
-                    for m in cur.fetchall()
-                ]
+                    })
 
 
-                chats.append({
+            chats = [
 
+                {
                     "id":
                         row["id"],
 
@@ -138,8 +253,11 @@ def get_chats():
                         .isoformat(),
 
                     "messages":
-                        messages
-                })
+                        by_chat.get(row["id"], [])
+                }
+
+                for row in rows
+            ]
 
 
         return jsonify({
@@ -351,6 +469,8 @@ def chat():
             or message[:80]
         )
 
+        uploads = request.files.getlist("files")
+
     else:
 
         data = (
@@ -375,6 +495,8 @@ def chat():
             or message[:80]
         )
 
+        uploads = []
+
 
     # ==================================================
     # 3. VALIDATE MESSAGE
@@ -385,6 +507,26 @@ def chat():
         return jsonify({
             "error": "Message is required"
         }), 400
+
+
+    # ==================================================
+    # 3b. READ ATTACHMENTS
+    #
+    # The client posts these as multipart "files"; they
+    # used to be dropped on the floor.
+    # ==================================================
+
+    # The multipart branch yields a string; normalise so the response type
+    # matches the JSON branch and a junk value is treated as "new chat".
+    try:
+        chat_id = int(chat_id) if chat_id else None
+    except (TypeError, ValueError):
+        chat_id = None
+
+    attachment_names, attachment_text = _read_attachments(uploads)
+
+    llm_message = message + attachment_text
+    stored_message = _encode_message(message, attachment_names)
 
 
     # ==================================================
@@ -532,11 +674,18 @@ def chat():
             # LLM needs:
             # oldest -> newest
 
-            history = list(
-                reversed(
-                    cur.fetchall()
-                )
-            )
+            history = [
+
+                {
+                    "role": r["role"],
+
+                    # Older turns may be stored in the attachment JSON
+                    # envelope — hand the model the text, not the envelope.
+                    "message": _decode_message(r["message"])[0]
+                }
+
+                for r in reversed(cur.fetchall())
+            ]
 
 
             # ==================================================
@@ -561,7 +710,7 @@ def chat():
                 """,
                 (
                     chat_id,
-                    message
+                    stored_message
                 )
             )
 
@@ -580,7 +729,7 @@ def chat():
         # ==================================================
 
         answer = llm_chat(
-            message,
+            llm_message,
             user_email,
             history
         )
@@ -656,6 +805,32 @@ def chat():
                 chat_id
 
         }), 200
+
+
+    except LLMUnavailable as e:
+
+        # ==================================================
+        # THE MODEL IS UNREACHABLE
+        #
+        # Say what is actually wrong — a bad key used to
+        # surface as a blank "Something went wrong".
+        # ==================================================
+
+        try:
+            conn.rollback()
+
+        except Exception:
+            pass
+
+
+        print(
+            f"[Chat API] LLM unavailable: {e}"
+        )
+
+
+        return jsonify({
+            "error": str(e)
+        }), 503
 
 
     except Exception as e:

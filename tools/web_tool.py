@@ -1,4 +1,7 @@
 import os
+import re
+
+from urllib.parse import urlparse
 
 from config import _load_env
 from langchain_core.tools import tool
@@ -15,20 +18,67 @@ OFFICIAL_DOMAINS = (
     "timesofindia.com", "hindustantimes.com"
 )
 
+_BASE_PARAMS = {
+    "engine": "google",
+    "gl": "us",
+    "hl": "en",
+    "num": "10",
+}
+
+# Only news-shaped queries should be pinned to the last 24 hours. Applying it
+# to everything starves documentation, comparison and how-to lookups.
+_RECENCY_HINTS = re.compile(
+    r"\b("
+    r"today|tonight|now|current|currently|latest|newest|recent|recently|"
+    r"news|breaking|live|score|scores|weather|forecast|price|stock|"
+    r"this (?:week|month|morning|evening)|yesterday|just announced|"
+    r"right now|so far"
+    r")\b",
+    re.IGNORECASE
+)
+
 serp_search = SerpAPIWrapper(
     serpapi_api_key=os.environ.get("SEARCH_API_KEY"),
-    params={
-        "engine": "google",
-        "gl": "us",
-        "hl": "en",
-        "num": "10",
-        "tbs": "qdr:d"  # past 24 hours for real-time results
-    }
+    params=dict(_BASE_PARAMS)
+)
+
+serp_search_recent = SerpAPIWrapper(
+    serpapi_api_key=os.environ.get("SEARCH_API_KEY"),
+    params={**_BASE_PARAMS, "tbs": "qdr:d"}  # past 24 hours
 )
 
 
+def _needs_recency(query: str) -> bool:
+    return bool(_RECENCY_HINTS.search(query or ""))
+
+
 def _is_official(link: str) -> bool:
-    return any(domain in link for domain in OFFICIAL_DOMAINS)
+    host = (urlparse(link).hostname or "").lower()
+
+    if host.startswith("www."):
+        host = host[4:]
+
+    if not host:
+        return False
+
+    for domain in OFFICIAL_DOMAINS:
+
+        # "docs.", "developer." — subdomain prefixes
+        if domain.endswith("."):
+            if host.startswith(domain):
+                return True
+
+        # ".gov", ".edu" — TLD suffixes
+        elif domain.startswith("."):
+            if host.endswith(domain):
+                return True
+
+        # Registrable domain: match it or any of its subdomains, so that
+        # evil.com/github.com no longer counts as official.
+        elif host == domain or host.endswith("." + domain):
+            return True
+
+    return False
 
 
 def _sort_by_official(items: list, link_key: str = "link") -> list:
@@ -46,7 +96,8 @@ def web_tool(query: str) -> str:
     """
 
     try:
-        results = serp_search.results(query)
+        engine = serp_search_recent if _needs_recency(query) else serp_search
+        results = engine.results(query)
         output = []
 
         # 1. Answer Box

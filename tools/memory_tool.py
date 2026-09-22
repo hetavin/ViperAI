@@ -13,6 +13,11 @@ def memory_tool(user_email: str, limit: int = 30) -> str:
 
     try:
         conn = db_connection()
+
+        if conn is None:
+            print("[Memory Tool Error] no database connection")
+            return "Unable to retrieve user memories."
+
         cursor = conn.cursor()
 
         cursor.execute(
