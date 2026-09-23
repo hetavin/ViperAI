@@ -169,4 +169,186 @@ $(document).ready(function () {
         });
     });
 
+
+    // ── Forgot password ───────────────────────────────────────────────────────
+    // The three forms below call these from their onsubmit attributes, so they
+    // have to be reachable from the global scope — they were never defined at
+    // all, which made "Send Verification Code" throw and reload the page.
+
+    let fpEmail = '';
+    let resendTimer = null;
+
+    function stopResendTimer() {
+        if (resendTimer) { clearInterval(resendTimer); resendTimer = null; }
+    }
+
+    function startResendTimer(seconds) {
+        stopResendTimer();
+        let left = seconds;
+        const $btn = $('#resendBtn');
+        const paint = () => $btn.html('Resend in <span id="resendTimer">' + left + '</span>s');
+        $btn.prop('disabled', true);
+        paint();
+        resendTimer = setInterval(() => {
+            left -= 1;
+            if (left <= 0) {
+                stopResendTimer();
+                $btn.prop('disabled', false).text('Resend code');
+                return;
+            }
+            paint();
+        }, 1000);
+    }
+
+    function otpValue() {
+        return $('.otp-box').map(function () { return (this.value || '').trim(); }).get().join('');
+    }
+
+    function clearOtp() {
+        $('.otp-box').val('').removeClass('bad');
+        $('#otpErr').removeClass('on');
+        $('.otp-box').first().focus();
+    }
+
+    // Typing / pasting across the six boxes
+    $('#otpWrap').on('input', '.otp-box', function () {
+        this.value = (this.value || '').replace(/\D/g, '').slice(0, 1);
+        $('#otpErr').removeClass('on');
+        if (this.value) $(this).next('.otp-box').focus();
+    });
+
+    $('#otpWrap').on('keydown', '.otp-box', function (e) {
+        if (e.key === 'Backspace' && !this.value) $(this).prev('.otp-box').focus();
+        if (e.key === 'ArrowLeft') $(this).prev('.otp-box').focus();
+        if (e.key === 'ArrowRight') $(this).next('.otp-box').focus();
+    });
+
+    $('#otpWrap').on('paste', '.otp-box', function (e) {
+        const text = (e.originalEvent.clipboardData || window.clipboardData).getData('text') || '';
+        const digits = text.replace(/\D/g, '').slice(0, 6);
+        if (!digits) return;
+        e.preventDefault();
+        const $boxes = $('.otp-box');
+        $boxes.val('');
+        digits.split('').forEach((d, i) => $boxes.eq(i).val(d));
+        $boxes.eq(Math.min(digits.length, 5)).focus();
+    });
+
+    $('#fpEmail').on('input', function () { cErr('fpEmail', 'fpEErr'); });
+    $('#fpNewPass').on('input', function () { cErr('fpNewPass', 'fnpErr'); });
+    $('#fpConfPass').on('input', function () { cErr('fpConfPass', 'fcpErr'); });
+
+    function sendOtpRequest(email, $btn, onSent) {
+        $btn.prop('disabled', true).addClass('ld');
+        $.ajax({
+            url: '/api/auth/forgot/send',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ email: email }),
+
+            success: function (res) {
+                $btn.prop('disabled', false).removeClass('ld');
+                fpEmail = email;
+                $('#fpOtpEmail').text(email);
+                toast(res.message || 'Verification code sent', 's');
+                onSent && onSent();
+            },
+
+            error: function (xhr) {
+                $btn.prop('disabled', false).removeClass('ld');
+                toast(xhr.responseJSON?.error || 'Could not send the code', 'e');
+            }
+        });
+    }
+
+    window.doSendOtp = function (e) {
+        e.preventDefault();
+        const em = $('#fpEmail').val().trim();
+
+        if (!em) { sErr('fpEmail', 'fpEErr', 'Email is required'); return; }
+        if (!EMAIL_RE.test(em)) { sErr('fpEmail', 'fpEErr', 'Enter a valid email'); return; }
+
+        sendOtpRequest(em, $('#fpSendBtn'), function () {
+            showForm('forgotOtpForm');
+            clearOtp();
+            startResendTimer(30);
+        });
+    };
+
+    window.resendOtp = function () {
+        if (!fpEmail) { showForm('forgotEmailForm'); return; }
+        sendOtpRequest(fpEmail, $('#resendBtn'), function () {
+            clearOtp();
+            startResendTimer(30);
+        });
+    };
+
+    window.doVerifyOtp = function (e) {
+        e.preventDefault();
+        const code = otpValue();
+
+        if (code.length !== 6) {
+            $('.otp-box').addClass('bad');
+            $('#otpErr').find('span').text('Enter all 6 digits').end().addClass('on');
+            return;
+        }
+
+        const $btn = $('#fpVerifyBtn').prop('disabled', true).addClass('ld');
+
+        $.ajax({
+            url: '/api/auth/forgot/verify',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ email: fpEmail, code: code }),
+
+            success: function () {
+                $btn.prop('disabled', false).removeClass('ld');
+                stopResendTimer();
+                $('#fpNewPass, #fpConfPass').val('');
+                showForm('forgotNewPassForm');
+            },
+
+            error: function (xhr) {
+                $btn.prop('disabled', false).removeClass('ld');
+                const msg = xhr.responseJSON?.error || 'Verification failed';
+                $('.otp-box').addClass('bad');
+                $('#otpErr').find('span').text(msg).end().addClass('on');
+            }
+        });
+    };
+
+    window.doResetPassword = function (e) {
+        e.preventDefault();
+        const pw = $('#fpNewPass').val();
+        const pwc = $('#fpConfPass').val();
+        let ok = true;
+
+        if (!pw || pw.length < 6) { sErr('fpNewPass', 'fnpErr', 'Min 6 characters'); ok = false; }
+        if (!pwc) { sErr('fpConfPass', 'fcpErr', 'Please confirm password'); ok = false; }
+        else if (pw !== pwc) { sErr('fpConfPass', 'fcpErr', 'Passwords do not match'); ok = false; }
+        if (!ok) return;
+
+        const $btn = $('#fpResetBtn').prop('disabled', true).addClass('ld');
+
+        $.ajax({
+            url: '/api/auth/forgot/reset',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ password: pw, confirm_password: pwc }),
+
+            success: function (res) {
+                $btn.prop('disabled', false).removeClass('ld');
+                $('#fpNewPass, #fpConfPass, #fpEmail').val('');
+                clearOtp();
+                toast(res.message || 'Password changed', 's');
+                showForm('forgotSuccessForm');
+            },
+
+            error: function (xhr) {
+                $btn.prop('disabled', false).removeClass('ld');
+                toast(xhr.responseJSON?.error || 'Could not change the password', 'e');
+            }
+        });
+    };
+
 });

@@ -1,3 +1,27 @@
+// The document library is a browser-side list: nothing uploads it anywhere and
+// no part of the chatbot reads it. saveData()/loadData() were called from four
+// places but never defined, so every upload and every delete died on a
+// ReferenceError half way through. Keep the list in this browser instead.
+const PDF_STORE_KEY = 'viperai_admin_pdfs';
+
+function loadData() {
+  try {
+    const raw = localStorage.getItem(PDF_STORE_KEY);
+    pdfs = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(pdfs)) pdfs = [];
+  } catch (e) {
+    pdfs = [];
+  }
+}
+
+function saveData() {
+  try {
+    localStorage.setItem(PDF_STORE_KEY, JSON.stringify(pdfs));
+  } catch (e) {
+    console.warn('Could not save the document list:', e);
+  }
+}
+
 let pdfs = [];
 let viperUsers = [];
 let deleteTarget = { type: '', id: null };
@@ -163,22 +187,24 @@ function updateDashboard() {
 
 const uploadZone = document.getElementById('uploadZone');
 
-uploadZone.addEventListener('dragover', (e) => {
-  e.preventDefault();
-  uploadZone.classList.add('dragover');
-});
+if (uploadZone) {
+  uploadZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    uploadZone.classList.add('dragover');
+  });
 
-uploadZone.addEventListener('dragleave', () => {
-  uploadZone.classList.remove('dragover');
-});
+  uploadZone.addEventListener('dragleave', () => {
+    uploadZone.classList.remove('dragover');
+  });
 
-uploadZone.addEventListener('drop', (e) => {
-  e.preventDefault();
-  uploadZone.classList.remove('dragover');
-  const files = Array.from(e.dataTransfer.files).filter(f => f.type === 'application/pdf');
-  if (files.length === 0) { showToast('Please drop PDF files only', 'error'); return; }
-  processFiles(files);
-});
+  uploadZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    uploadZone.classList.remove('dragover');
+    const files = Array.from(e.dataTransfer.files).filter(f => f.type === 'application/pdf');
+    if (files.length === 0) { showToast('Please drop PDF files only', 'error'); return; }
+    processFiles(files);
+  });
+}
 
 function handleFileSelect(event) {
   const files = Array.from(event.target.files);
@@ -241,7 +267,7 @@ function processFiles(files) {
     }, 200 + idx * 100);
   });
 
-  showToast(`${files.length} PDF${files.length > 1 ? 's' : ''} uploaded successfully`, 'success');
+  showToast(`${files.length} document${files.length > 1 ? 's' : ''} added to the library`, 'success');
 }
 
 function renderPdfList() {
@@ -415,8 +441,6 @@ function confirmDelete() {
     updateDashboard();
     showToast('PDF removed successfully', 'success');
   } else if (deleteTarget.type === 'chat') {
-    userChats = userChats.filter(c => c.id !== deleteTarget.id);
-    saveData();
     if (selectedChatId === deleteTarget.id) {
       selectedChatId = null;
       document.getElementById('chatHeader').style.display = 'none';
@@ -427,47 +451,92 @@ function confirmDelete() {
     }
     renderChatUserList();
     updateDashboard();
-    showToast('Chat history deleted', 'success');
   }
   closeDeleteModal();
 }
 
-function saveSettings() {
-  showToast('Settings saved successfully', 'success');
+// The chatbot reads none of these values yet; at least keep what was typed
+// instead of toasting "saved" over a form that reset on every reload.
+const SETTINGS_KEY = 'viperai_admin_settings';
+
+function loadSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+    if (saved.botName) document.getElementById('botName').value = saved.botName;
+    if (saved.botWelcome) document.getElementById('botWelcome').value = saved.botWelcome;
+    if (saved.maxResponse) document.getElementById('maxResponse').value = saved.maxResponse;
+  } catch (e) {
+    console.warn('Could not read saved settings:', e);
+  }
 }
 
-function exportData() {
-  const data = JSON.stringify({ pdfs, userChats, exportedAt: new Date().toISOString() }, null, 2);
-  const blob = new Blob([data], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'botbase_export_' + new Date().toISOString().slice(0, 10) + '.json';
-  a.click();
-  URL.revokeObjectURL(url);
-  showToast('Chat data exported successfully', 'info');
+function saveSettings() {
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({
+      botName: document.getElementById('botName').value,
+      botWelcome: document.getElementById('botWelcome').value,
+      maxResponse: document.getElementById('maxResponse').value,
+    }));
+    showToast('Settings saved on this browser', 'success');
+  } catch (e) {
+    showToast('Could not save settings', 'error');
+  }
+}
+
+async function exportData() {
+  // This used to serialise an undefined `userChats` and throw before the file
+  // was ever built. Export what the server actually has.
+  showToast('Preparing export...', 'info');
+  try {
+    const res = await fetch('/api/admin/users');
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    const users = data.users || [];
+    const chats = [];
+
+    for (const u of users) {
+      const cRes = await fetch(`/api/admin/users/${encodeURIComponent(u.email)}/chats`);
+      const cData = await cRes.json();
+      for (const c of (cData.chats || [])) {
+        const mRes = await fetch(`/api/admin/chats/${c.id}/messages`);
+        const mData = await mRes.json();
+        chats.push({ ...c, user_email: u.email, messages: mData.messages || [] });
+      }
+    }
+
+    const payload = JSON.stringify(
+      { users, chats, documents: pdfs, exportedAt: new Date().toISOString() }, null, 2
+    );
+    const blob = new Blob([payload], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'viperai_export_' + new Date().toISOString().slice(0, 10) + '.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast(`Exported ${chats.length} chats`, 'success');
+  } catch (err) {
+    console.error('Export failed:', err);
+    showToast('Export failed', 'error');
+  }
 }
 
 function clearAllData() {
+  // It only ever cleared this browser's document list — it never deleted a
+  // single chat — so say that instead of promising to wipe chat history.
   deleteTarget = { type: 'all', id: null };
-  document.getElementById('deleteModalText').textContent = 'Are you sure you want to clear ALL data? This will remove all PDFs and chat history. This cannot be undone.';
-  document.getElementById('confirmDeleteBtn').textContent = 'Clear All';
+  document.getElementById('deleteModalText').textContent = 'Remove every document from the library on this browser? Chat history is not affected.';
+  document.getElementById('confirmDeleteBtn').textContent = 'Clear Library';
   document.getElementById('confirmDeleteBtn').onclick = function() {
     pdfs = [];
-    userChats = [];
-    selectedChatId = null;
     saveData();
     updateDashboard();
     renderPdfList();
-    renderChatUserList();
-    document.getElementById('chatHeader').style.display = 'none';
-    document.getElementById('chatMessages').innerHTML = `
-      <div class="empty-state"><i class="fas fa-arrow-left"></i>
-      <span style="font-size:14px;">Select a user to view their conversation</span></div>`;
     closeDeleteModal();
     document.getElementById('confirmDeleteBtn').textContent = 'Delete';
     document.getElementById('confirmDeleteBtn').onclick = confirmDelete;
-    showToast('All data cleared', 'success');
+    showToast('Document library cleared', 'success');
   };
   document.getElementById('deleteModal').classList.add('show');
 }
@@ -626,6 +695,9 @@ function renderViperChatMessages(messages) {
   setTimeout(() => msgContainer.scrollTop = msgContainer.scrollHeight, 100);
 }
 
+loadData();
+loadSettings();
+renderPdfList();
 updateDashboard();
 
 // Load admin profile into sidebar footer

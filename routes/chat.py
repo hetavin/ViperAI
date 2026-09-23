@@ -1,4 +1,3 @@
-import json
 import os
 
 from flask import Blueprint, jsonify, request, session
@@ -6,6 +5,7 @@ from flask import Blueprint, jsonify, request, session
 from connect import db_connection
 from services.llm_service import chat as llm_chat, LLMUnavailable
 from services.memory_worker import start_memory_worker
+from services.message_format import decode_message, encode_message
 
 
 chat_bp = Blueprint(
@@ -32,53 +32,15 @@ _MAX_INLINE_FILES = 5
 
 def _require_login():
 
-    if "user_id" not in session:
+    # Every handler below reads session["user_email"], so a cookie that carries
+    # only user_id (an older session) must not be treated as logged in.
+    if "user_id" not in session or not session.get("user_email"):
 
         return jsonify({
             "error": "Unauthorized"
         }), 401
 
     return None
-
-
-# ==================================================
-# MESSAGE STORAGE FORMAT
-#
-# A message with attachments is stored as JSON so the
-# file names survive into the history and the admin
-# view. Plain messages are stored verbatim.
-# ==================================================
-
-def _decode_message(raw):
-
-    if not raw or not raw.startswith("{"):
-        return raw or "", []
-
-    try:
-        payload = json.loads(raw)
-    except (ValueError, TypeError):
-        return raw, []
-
-    if not isinstance(payload, dict) or "text" not in payload:
-        return raw, []
-
-    files = payload.get("files")
-
-    if not isinstance(files, list):
-        files = []
-
-    return payload.get("text") or "", [str(f) for f in files]
-
-
-def _encode_message(text, file_names):
-
-    if not file_names:
-        return text
-
-    return json.dumps({
-        "text": text,
-        "files": file_names
-    })
 
 
 def _read_attachments(uploads):
@@ -222,7 +184,7 @@ def get_chats():
 
                 for m in cur.fetchall():
 
-                    text, files = _decode_message(m["message"])
+                    text, files = decode_message(m["message"])
 
                     by_chat[m["chat_id"]].append({
 
@@ -246,7 +208,7 @@ def get_chats():
                         row["id"],
 
                     "title":
-                        row["title"],
+                        row["title"] or "New Chat",
 
                     "createdAt":
                         row["created_at"]
@@ -324,8 +286,17 @@ def delete_chat(chat_id):
                 )
             )
 
+            deleted = cur.rowcount
+
 
         conn.commit()
+
+
+        if not deleted:
+
+            return jsonify({
+                "error": "Chat not found"
+            }), 404
 
 
         return jsonify({
@@ -343,6 +314,108 @@ def delete_chat(chat_id):
 
         return jsonify({
             "error": "Failed to delete chat"
+        }), 500
+
+
+    finally:
+
+        conn.close()
+
+
+# ==================================================
+# RENAME ONE CHAT
+# PATCH /api/chats/<id>
+#
+# The sidebar has always offered "Rename", but there
+# was no endpoint behind it: the new title lived in
+# the browser only and was lost on the next reload.
+# ==================================================
+
+@chat_bp.route(
+    "/api/chats/<int:chat_id>",
+    methods=["PATCH"]
+)
+def rename_chat(chat_id):
+
+    err = _require_login()
+
+    if err:
+        return err
+
+
+    data = request.get_json(silent=True) or {}
+
+    title = (data.get("title") or "").strip()
+
+    if not title:
+
+        return jsonify({
+            "error": "Title is required"
+        }), 400
+
+
+    # title is VARCHAR(500) in the schema.
+    title = title[:500]
+
+
+    conn = db_connection()
+
+    if not conn:
+
+        return jsonify({
+            "error": "DB error"
+        }), 500
+
+
+    try:
+
+        with conn.cursor() as cur:
+
+            cur.execute(
+                """
+                UPDATE chats
+
+                SET title = %s
+
+                WHERE id = %s
+                AND user_email = %s
+                """,
+                (
+                    title,
+                    chat_id,
+                    session["user_email"]
+                )
+            )
+
+            updated = cur.rowcount
+
+
+        conn.commit()
+
+
+        if not updated:
+
+            return jsonify({
+                "error": "Chat not found"
+            }), 404
+
+
+        return jsonify({
+            "ok": True,
+            "title": title
+        }), 200
+
+
+    except Exception as e:
+
+        conn.rollback()
+
+        print(
+            f"[Rename Chat Error] {e}"
+        )
+
+        return jsonify({
+            "error": "Failed to rename chat"
         }), 500
 
 
@@ -523,10 +596,14 @@ def chat():
     except (TypeError, ValueError):
         chat_id = None
 
+    # title is VARCHAR(500); an over-long one from a crafted request used to
+    # fail the INSERT and surface as a generic 500.
+    title = (title or '')[:500]
+
     attachment_names, attachment_text = _read_attachments(uploads)
 
     llm_message = message + attachment_text
-    stored_message = _encode_message(message, attachment_names)
+    stored_message = encode_message(message, attachment_names)
 
 
     # ==================================================
@@ -681,7 +758,7 @@ def chat():
 
                     # Older turns may be stored in the attachment JSON
                     # envelope — hand the model the text, not the envelope.
-                    "message": _decode_message(r["message"])[0]
+                    "message": decode_message(r["message"])[0]
                 }
 
                 for r in reversed(cur.fetchall())

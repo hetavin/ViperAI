@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, redirect, session
+from flask import Blueprint, current_app, redirect, render_template, send_from_directory, session
 
 route_bp = Blueprint('route_bp', __name__)
 
@@ -21,3 +21,23 @@ def admin():
     if session.get('user_role') != 'admin':
         return redirect('/login')
     return render_template("admin.html")
+
+
+@route_bp.route('/service-worker.js')
+def service_worker():
+    """
+    Serve the worker from the site root.
+
+    Registering /static/service-worker.js with scope "/" is rejected by the
+    browser (SecurityError) because a worker may only control its own
+    directory and below, so registration failed outright and nothing was ever
+    cached. Served from here the scope is legitimate; the header keeps it
+    valid even if the file moves back under /static.
+    """
+    response = send_from_directory(
+        current_app.static_folder, 'service-worker.js',
+        mimetype='application/javascript'
+    )
+    response.headers['Service-Worker-Allowed'] = '/'
+    response.headers['Cache-Control'] = 'no-cache'
+    return response

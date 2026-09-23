@@ -19,9 +19,15 @@ _load_env()
 # 1. LLM
 # ==================================================
 
+# A missing GROQ_MODEL used to be passed through as None, which fails inside
+# ChatGroq at import time and takes the whole app down before it serves a
+# single request. Fall back to the same default config.py uses.
 llm = ChatGroq(
-    model=os.environ.get("GROQ_MODEL"),
-    api_key=os.environ.get("GROQ_API_KEY"),
+    model=os.environ.get(
+        "GROQ_MODEL",
+        "meta-llama/llama-4-scout-17b-16e-instruct"
+    ) or "meta-llama/llama-4-scout-17b-16e-instruct",
+    api_key=os.environ.get("GROQ_API_KEY", ""),
     temperature=0
 )
 

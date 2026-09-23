@@ -14,9 +14,26 @@ def _admin_required(f):
     return decorated
 
 
+def _json_errors(f):
+    """
+    A failing query used to escape as Flask's HTML 500 page, which the admin
+    JS then tried to parse as JSON — every panel just said "Failed to load"
+    with nothing in the log. Answer with JSON and record the cause.
+    """
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        try:
+            return f(*args, **kwargs)
+        except Exception as e:
+            print(f"[Admin] {f.__name__} failed: {e}")
+            return jsonify({'error': 'Server error'}), 500
+    return decorated
+
+
 # ── GET /api/admin/dashboard ──────────────────────────────────────────────────
 @admin_bp.route('/api/admin/dashboard')
 @_admin_required
+@_json_errors
 def dashboard():
     conn = db_connection()
     if not conn:
@@ -99,6 +116,7 @@ def dashboard():
 # ── GET /api/admin/stats ──────────────────────────────────────────────────────
 @admin_bp.route('/api/admin/stats')
 @_admin_required
+@_json_errors
 def stats():
     conn = db_connection()
     if not conn:
@@ -119,6 +137,7 @@ def stats():
 # ── GET /api/admin/users ──────────────────────────────────────────────────────
 @admin_bp.route('/api/admin/users')
 @_admin_required
+@_json_errors
 def get_users():
     conn = db_connection()
     if not conn:
@@ -156,6 +175,7 @@ def get_users():
 # ── GET /api/admin/users/<email>/chats ────────────────────────────────────────
 @admin_bp.route('/api/admin/users/<path:email>/chats')
 @_admin_required
+@_json_errors
 def get_user_chats(email):
     conn = db_connection()
     if not conn:
@@ -185,6 +205,7 @@ def get_user_chats(email):
 # ── GET /api/admin/chats/<id>/messages ────────────────────────────────────────
 @admin_bp.route('/api/admin/chats/<int:chat_id>/messages')
 @_admin_required
+@_json_errors
 def get_chat_messages(chat_id):
     conn = db_connection()
     if not conn:
@@ -213,6 +234,7 @@ def get_chat_messages(chat_id):
 # ── GET /api/admin/me ─────────────────────────────────────────────────────────
 @admin_bp.route('/api/admin/me')
 @_admin_required
+@_json_errors
 def admin_me():
     return jsonify({
         'name':  session.get('user_name', 'Admin'),

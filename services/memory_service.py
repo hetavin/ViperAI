@@ -3,6 +3,7 @@ import hashlib
 
 from config import _load_env
 from connect import db_connection
+from services.message_format import decode_message
 
 from langchain_groq import ChatGroq
 from langchain_core.prompts import PromptTemplate
@@ -179,6 +180,11 @@ def format_conversation(rows):
 
             role = row[0]
             message = row[1]
+
+        # A message with attachments is stored as a JSON envelope. Feeding that
+        # envelope to the extractor made it "remember" file names and JSON
+        # punctuation instead of what the user actually said.
+        message = decode_message(message)[0]
 
         if role.lower() == "user":
 

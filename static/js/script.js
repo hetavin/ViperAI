@@ -53,37 +53,6 @@ function rt(t) {
     });
 
     // 3. Extract markdown links
-    const saved = [];
-    const save = html => { saved.push(html); return `\x00SAVED${saved.length - 1}\x00`; };
-
-    // 1. Extract fenced code blocks before anything else
-    t = t.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => {
-        const l = esc(lang || 'code');
-        return save(`<div class="cb"><div class="cb-h"><span class="cb-l">${l}</span><button class="cb-c" onclick="copyCode(this)" title="Copy"><i class="fas fa-copy"></i></button></div><pre><code class="language-${l}">${esc(code.replace(/\n$/, ''))}</code></pre></div>`);
-    });
-
-    // 2. Extract markdown tables before escaping (pipes must be raw)
-    t = t.replace(/^([ \t]*\|.+\|[ \t]*\n)([ \t]*\|[ \t]*[-:| \t]+\|[ \t]*\n)((?:[ \t]*\|.+\|[ \t]*\n?)*)/gm, (_, head, sep, body) => {
-        const parseRow = row => row.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim());
-        const aligns = parseRow(sep).map(c => {
-            if (/^:-+:$/.test(c.trim())) return 'center';
-            if (/^-+:$/.test(c.trim()))  return 'right';
-            return 'left';
-        });
-        const inlineRt = s => s
-            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\*(.+?)\*/g, '<em>$1</em>')
-            .replace(/`([^`]+)`/g, '<code>$1</code>');
-        const ths = parseRow(head).map((c, i) =>
-            `<th style="text-align:${aligns[i] || 'left'}">${inlineRt(esc(c))}</th>`).join('');
-        const bodyRows = body.trim().split('\n').filter(Boolean);
-        const trs = bodyRows.map(row =>
-            '<tr>' + parseRow(row).map((c, i) =>
-                `<td style="text-align:${aligns[i] || 'left'}">${inlineRt(esc(c))}</td>`).join('') + '</tr>').join('');
-        return save(`<div class="md-tbl-wrap"><table class="md-tbl"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table></div>`);
-    });
-
-    // 3. Extract markdown links
     const links = [];
     t = t.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, label, url) => {
         const href = safeUrl(url);
@@ -94,17 +63,10 @@ function rt(t) {
     });
 
     // 4. Escape remaining text
-
-    // 4. Escape remaining text
     let h = esc(t);
 
     // 5. Restore links and saved blocks
-
-    // 5. Restore links and saved blocks
     h = h.replace(/\x00LINK(\d+)\x00/g, (_, i) => links[+i]);
-    h = h.replace(/\x00SAVED(\d+)\x00/g, (_, i) => saved[+i]);
-
-    // inline code
     h = h.replace(/\x00SAVED(\d+)\x00/g, (_, i) => saved[+i]);
 
     // inline code
@@ -235,7 +197,7 @@ function togCompact(on) {
 function togSB() { document.getElementById('sb').classList.toggle('open'); }
 function renderSB() {
     const el = document.getElementById('sbList'), q = document.getElementById('sbSrch').value.toLowerCase();
-    const fl = chats.filter(c => c.title.toLowerCase().includes(q));
+    const fl = chats.filter(c => String(c.title || '').toLowerCase().includes(q));
     if (!fl.length) { el.innerHTML = `<div class="sb-empty"><i class="fas fa-comments"></i><span>${q ? 'No matches' : 'No conversations yet'}</span></div>`; return; }
     const now = Date.now(), td = [], wk = [], ol = [];
     fl.forEach(c => { const a = now - new Date(c.createdAt).getTime(); if (a < 864e5) td.push(c); else if (a < 6048e5) wk.push(c); else ol.push(c); });
@@ -381,18 +343,10 @@ function send() {
                 if (micTriggered) {
                     micTriggered = false;
                     if (voiceMode) speakText(resp, () => { if (voiceMode) recognition.start(); });
-            const tip2 = document.getElementById('typI'); if (tip2) tip2.remove();
-            streamBotResponse(resp, chat, () => {
-                gen = false; updateProfileStats();
-                if (micTriggered) {
-                    micTriggered = false;
-                    if (voiceMode) speakText(resp, () => { if (voiceMode) recognition.start(); });
                 }
-            });
             });
         })
         .catch(err => {
-            const tip3 = document.getElementById('typI'); if (tip3) tip3.remove();
             const tip3 = document.getElementById('typI'); if (tip3) tip3.remove();
             const msg = err && err.message ? `Error: ${err.message}` : 'Something went wrong. Please try again.';
             chat.messages.push({ role: 'bot', text: msg, time: new Date().toISOString() });
@@ -434,68 +388,7 @@ function streamBotResponse(fullText, chat, onDone) {
             // Finalise: store full message and highlight code
             chat.messages.push({ role: 'bot', text: fullText, time: new Date().toISOString() });
             hlCode(body);
-            onDone && onDone();
-            return;
-        }
-        accumulated += (i > 0 ? '\n\n' : '') + chunks[i];
-        i++;
-
-        // Re-render accumulated markdown into body
-        body.innerHTML = rt(accumulated);
-
-        // Animate only the last rendered child element
-        const children = body.children;
-        if (children.length) {
-            const last = children[children.length - 1];
-            last.classList.add('stream-chunk');
-            // Remove class after animation so it doesn't replay
-            last.addEventListener('animationend', () => last.classList.remove('stream-chunk'), { once: true });
-        }
-
-        ms.scrollTop = 1e6;
-
-        // Delay: slightly longer for code blocks, shorter for lines
-        const delay = /^```/.test(chunks[i - 1]) ? 80 : 38;
-        setTimeout(appendNext, delay);
-    }
-
-    appendNext();
-}
-
-/* ===== STREAMING RENDERER ===== */
-function streamBotResponse(fullText, chat, onDone) {
-    const inner = document.getElementById('msIn');
-    const ms = document.getElementById('ms');
-
-    // Build the bot message wrapper (no content yet)
-    const wrap = document.createElement('div');
-    wrap.className = 'mg';
-    wrap.style.marginBottom = compact ? '10px' : '20px';
-    const header = `<div class="mg-h"><div class="mg-a b">🤖</div><span class="mg-n">⚡ ViperAI</span><span class="mg-badge">AI</span><span class="mg-t">🕐 ${ft(new Date().toISOString())}</span></div>`;
-    wrap.innerHTML = header;
-    const body = document.createElement('div');
-    body.className = 'mg-b mg-b-bot';
-    wrap.appendChild(body);
-    inner.appendChild(wrap);
-    ms.scrollTop = 1e6;
-
-    // Split into paragraphs / lines, filter empties
-    const chunks = fullText.split(/\n\n+/).flatMap(block => {
-        // keep code blocks whole
-        if (/^```/.test(block.trim())) return [block];
-        // split long blocks by newline
-        const lines = block.split('\n').filter(l => l.trim());
-        return lines.length > 1 ? lines : [block];
-    }).filter(c => c.trim());
-
-    let accumulated = '';
-    let i = 0;
-
-    function appendNext() {
-        if (i >= chunks.length) {
-            // Finalise: store full message and highlight code
-            chat.messages.push({ role: 'bot', text: fullText, time: new Date().toISOString() });
-            hlCode(body);
+            renderSB();
             onDone && onDone();
             return;
         }
@@ -530,7 +423,38 @@ function newChat() {
     if (innerWidth <= 768) document.getElementById('sb').classList.remove('open');
 }
 function openRn() { if (!activeId) return; rnId = activeId; const c = chats.find(x => x.id === activeId); document.getElementById('rnIn').value = c ? c.title : ''; document.getElementById('rnMo').classList.add('on'); setTimeout(() => document.getElementById('rnIn').select(), 50); }
-function saveRn() { if (!rnId) return; const c = chats.find(x => x.id === rnId), v = document.getElementById('rnIn').value.trim(); if (c && v) { c.title = v; document.getElementById('tbT').textContent = v; renderSB(); toast('Chat renamed'); } closeMo('rnMo'); }
+function saveRn() {
+    if (!rnId) return;
+    const c = chats.find(x => x.id === rnId), v = document.getElementById('rnIn').value.trim();
+    const id = rnId;
+    closeMo('rnMo');
+    if (!c || !v || c.title === v) return;
+    const previous = c.title;
+    c.title = v;
+    if (activeId === id) document.getElementById('tbT').textContent = v;
+    renderSB();
+    if (!c.serverChatId) { toast('Chat renamed'); return; }
+    fetch('/api/chats/' + c.serverChatId, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: v })
+    })
+        .then(r => r.json().then(d => ({ ok: r.ok, d })))
+        .then(({ ok, d }) => {
+            if (ok && d.ok) { toast('Chat renamed'); return; }
+            // Put the old title back rather than showing one the server rejected.
+            c.title = previous;
+            if (activeId === id) document.getElementById('tbT').textContent = previous;
+            renderSB();
+            toast('Rename failed: ' + (d.error || 'unknown error'));
+        })
+        .catch(() => {
+            c.title = previous;
+            if (activeId === id) document.getElementById('tbT').textContent = previous;
+            renderSB();
+            toast('Rename failed');
+        });
+}
 document.getElementById('rnIn').addEventListener('keydown', e => { if (e.key === 'Enter') saveRn(); if (e.key === 'Escape') closeMo('rnMo'); });
 function openDlId(id) { delId = id; document.getElementById('dlTitle').textContent = 'Delete Chat'; document.getElementById('dlText').textContent = 'This conversation will be permanently deleted.'; document.getElementById('dlConfirm').textContent = 'Delete'; document.getElementById('dlConfirm').onclick = doDel; document.getElementById('dlMo').classList.add('on'); }
 function doDel() {
@@ -540,9 +464,9 @@ function doDel() {
     closeMo('dlMo');
     if (c && c.serverChatId) {
         fetch('/api/chats/' + c.serverChatId, { method: 'DELETE' })
-            .then(r => r.json())
-            .then(d => {
-                if (d.ok) { _removeChat(id); toast('Chat deleted'); }
+            .then(r => r.json().then(d => ({ ok: r.ok, d })))
+            .then(({ ok, d }) => {
+                if (ok && d.ok) { _removeChat(id); toast('Chat deleted'); }
                 else toast('Delete failed: ' + (d.error || 'unknown error'));
             })
             .catch(() => toast('Delete failed'));
@@ -565,9 +489,9 @@ function clearAll() {
     document.getElementById('dlConfirm').onclick = function () {
         closeMo('dlMo');
         fetch('/api/chats', { method: 'DELETE' })
-            .then(r => r.json())
-            .then(d => {
-                if (d.ok) { chats = []; activeId = null; showWelcome(); renderSB(); updateProfileStats(); closeSettings(); toast('All chats cleared'); }
+            .then(r => r.json().then(d => ({ ok: r.ok, d })))
+            .then(({ ok, d }) => {
+                if (ok && d.ok) { chats = []; activeId = null; showWelcome(); renderSB(); updateProfileStats(); closeSettings(); toast('All chats cleared'); }
                 else toast('Clear failed: ' + (d.error || 'unknown error'));
             })
             .catch(() => toast('Clear failed'));
@@ -804,5 +728,6 @@ fetch('/api/auth/me')
 function doLogout() {
     fetch('/api/auth/logout', { method: 'POST' })
         .then(r => r.json())
-        .then(d => { window.location.href = d.redirect; });
+        .then(d => { window.location.href = d.redirect || '/login'; })
+        .catch(() => { window.location.href = '/login'; });
 }
